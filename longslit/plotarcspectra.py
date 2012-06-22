@@ -1,0 +1,52 @@
+import sys
+
+import pylab as pl
+import numpy as np
+
+import PySpectrograph
+from PySpectrograph.Models import RSSModel
+from PySpectrograph.Spectra import Spectrum
+
+def plotarcspectra(arclist='Ne.txt', grating='PG0900', gratang=15.0, camang=30.0, slit=1.5, xbin=2, ybin=2):
+   """Plot an Arc Line list for a given RSS set up"""
+   rss=RSSModel.RSSModel(grating_name=grating, gratang=gratang, camang=camang, 
+                      slit=slit, xbin=xbin, ybin=ybin)
+
+
+   #print out some basic statistics
+   print 1e7*rss.calc_bluewavelength(), 1e7*rss.calc_centralwavelength(), 1e7*rss.calc_redwavelength()
+   R=rss.calc_resolution(rss.calc_centralwavelength(), rss.alpha(), -rss.beta())
+   res=1e7*rss.calc_resolelement(rss.alpha(), -rss.beta())
+   print R, res
+
+   #set up the detector
+   ycen=rss.detector.get_ypixcenter()
+   d_arr=rss.detector.make_detector()[ycen,:] #creates 1-D detector map
+   xarr=np.arange(len(d_arr))
+   w=1e7*rss.get_wavelength(xarr)
+
+   #set up the artificial spectrum
+   sw,sf=pl.loadtxt(arclist, usecols=(0,1), unpack=True)
+   wrange=[1e7*rss.calc_bluewavelength(), 1e7*rss.calc_redwavelength()]
+   spec=Spectrum.Spectrum(sw, sf, wrange=wrange, dw=res/10, stype='line', sigma=res)
+
+   #interpolate it over the same range as the detector
+   spec.interp(w)
+   
+
+
+   #plot it
+   pl.figure()
+   pl.plot(spec.wavelength, d_arr*((spec.flux)/spec.flux.max()))
+   pl.show()
+
+if __name__=='__main__':
+   #create the spectrograph model
+   arclist=sys.argv[1]
+   grating=sys.argv[2]
+   gratang=float(sys.argv[3])
+   camang=float(sys.argv[4])
+   slit=float(sys.argv[5])
+   xbin=int(sys.argv[6])
+   ybin=int(sys.argv[7])
+   plotarcspectra(arclist, grating, gratang, camang, slit, xbin, ybin)
