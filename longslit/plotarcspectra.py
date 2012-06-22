@@ -38,7 +38,17 @@ def plotarcspectra(arclist='Ne.txt', grating='PG0900', gratang=15.0, camang=30.0
    #plot it
    pl.figure()
    pl.plot(spec.wavelength, d_arr*((spec.flux)/spec.flux.max()))
+
+   print pl.gca().get_ylim()
+   for i,f in zip(sw,sf):
+       if i>spec.wavelength.min() and i<spec.wavelength.max():
+          print i, f, sf.max(), spec.flux.max()
+          #pl.text(i, f/sf.max(), i, fontsize='large', rotation=90)
+          y=max(0.1, f/sf.max())
+          pl.text(i, y, i,  rotation=90)
+   
    pl.show()
+
 
 if __name__=='__main__':
    #create the spectrograph model
