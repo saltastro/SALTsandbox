@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+"""
+SPRED--Automatically produce wavelength calibrated data.  This tasks runs saltreduce on
+the data and will produce wavelength calibrated spectroscopic data.   As of right now,
+
+Author                 Version      Date
+-----------------------------------------------
+S. M. Crawford (SAAO)    1.0        21 APR 2011
+
+"""
+
+
+import pyraf
+from pyraf import iraf
+from pyraf.iraf import pysalt
+import os, sys, time, getopt
+execfile(iraf.osfn('pysalt$saltspec/specreduce.py'))
+
+#if running it on a general set of images
+def usage():
+   print """
+spred--Automatically produce wavelength calibrated data.
+
+Usage:
+   spred [file] [y1] [y2]
+   file--mosaiced RSS longslit file
+   y1--lower extraction boundary
+   y2--upper extraction boundary
+
+    Options:
+   --nosky  run without sky subtraction
+   --skysect [y1:y2] set the sky section to the following values
+"""
+   exit()
+ 
+skysub=True 
+skysection='1400:1500'
+
+try:
+   opts, args = getopt.getopt(sys.argv[1:],"hs:",["help","nosky","skysect="])
+except getopt.GetoptError:
+    usage()
+    sys.exit(2)
+
+for o, a in opts:
+   if o in ("-h", "--help"):
+            usage()
+            sys.exit()
+   if o in ("--nosky"):
+      skysub=False
+   if o in ("--skysect", "-s"):
+      skysection=a
+
+if len(args)!=3: usage()
+img=args[0]
+y1=int(args[1])
+y2=int(args[2])
+sect='[%i:%i]' % (y1,y2)
+
+
+badpixelimage=None
+caltype='rss'
+function='polynomial'
+order=3
+findobj=False
+objsection=sect
+thresh=3.0
+logfile='saltspec.log'
+clobber=True
+verbose=True
+specreduce(images=img,badpixelimage=badpixelimage,caltype=caltype,
+                function=function, order=order, skysub=skysub, skysection=skysection,
+                findobj=findobj, objsection=objsection, thresh=thresh,
+                clobber=clobber, logfile=logfile, verbose=verbose)
+
+
+
+
