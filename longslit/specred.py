@@ -184,13 +184,6 @@ def specred(rawdir, prodir, imreduce=True, specreduce=True, calfile=None, lamp='
            #clean up the spectra for bad pixels
            cleanspectra(ofile)
 
-           if spec.count('MCG'): mcg_list.append(ofile)
-
-    #combine the spectra
-    #speccombine(mcg_list, obsdate)
-    
-
-    #plot the spectra
 
 def speccombine(spec_list, obsdate):
    """Combine N spectra"""
@@ -212,7 +205,7 @@ def speccombine(spec_list, obsdate):
    f=f/len(spec_list)
    e=e**0.5/len(spec_list)
 
-   sfile='MCG-6-30-15.%s.spec' % obsdate
+   sfile='%s.spec' % obsdate
    fout=open(sfile, 'w')
    for i in range(len(w)):
            fout.write('%f %e %e\n' % (w[i], f[i], e[i]))
@@ -375,4 +368,4 @@ def findskysection(section, skysection=[800,900], skylimit=100):
 if __name__=='__main__':
    rawdir=sys.argv[1]
    prodir=os.path.curdir+'/'
-   agnred(rawdir, prodir)
+   specred(rawdir, prodir)
