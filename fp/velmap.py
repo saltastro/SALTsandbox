@@ -14,19 +14,25 @@ from PySpectrograph.Spectra import detectlines as dl
 
 from fitdata import fitdata
 
-from velpoint import velpoint
+from velpoint import velpoint, read_transform
 
 if __name__=='__main__':
-   xarr=range(600,940)
-   yarr=range(315,600)
+   norm=np.loadtxt(sys.argv[1], usecols=(1,), unpack=True)
+   hdulist, transform, nframe=read_transform(sys.argv[2])
+   axc=int(sys.argv[3])
+   ayc=int(sys.argv[4])
+
+   xarr=range(int(sys.argv[5]), int(sys.argv[6]))
+   yarr=range(int(sys.argv[7]), int(sys.argv[8]))
+   print xarr, yarr
    #xarr=range(650,730)
    #yarr=range(365,420)
    varr=np.zeros((len(yarr),len(xarr)))
  
-   vp=velpoint(axc=794, ayc=513)
-
-   fout=open('alldata.cube', 'w')
-   vout=open('vcen.data', 'w')
+   vp=velpoint(hdulist, axc=axc, ayc=ayc, norm=norm, transform=transform)
+   prefix=sys.argv[1].split('.')[0]
+   fout=open(prefix+'_alldata.cube', 'w')
+   vout=open(prefix+'_vcen.data', 'w')
    tstart=time.time()
    for i in range(len(xarr)):
      print i, (time.time()-tstart)/60.0

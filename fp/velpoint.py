@@ -124,14 +124,8 @@ class velpoint:
        return wave, flux, dl.centroid(wave, flux, kern=[0,-1,0,1,0])
  
  
-
-
-if __name__=='__main__':
-   x=int(sys.argv[1])
-   y=int(sys.argv[2])
-   norm=np.loadtxt('tmp.normflux', usecols=(1,), unpack=True)
-     
-   infile=open('tmp.transform').readlines()
+def read_transform(infile):
+   infile=open(infile).readlines()
    nframe=len(infile)
 
    transform=[]
@@ -140,7 +134,17 @@ if __name__=='__main__':
        l=info.split()
        img=l[0].strip()
        transform.append(l[1:])
-       hdulist.append(pyfits.open(img))   
+       hdulist.append(pyfits.open(img)) 
+   return hdulist,transform,nframe
 
-   vp=velpoint(hdulist, axc=794, ayc=513, norm=norm, transform=transform)
+if __name__=='__main__':
+   x=int(sys.argv[1])
+   y=int(sys.argv[2])
+   norm=np.loadtxt(sys.argv[3], usecols=(1,), unpack=True)
+   hdulist, transform, nframe=read_transform(sys.argv[4])  
+   axc=int(sys.argv[5])
+   ayc=int(sys.argv[6])
+   
+
+   vp=velpoint(hdulist, axc=axc, ayc=ayc, norm=norm, transform=transform)
    vp.velpoint(x,y)

@@ -35,20 +35,20 @@ if __name__=='__main__':
    #vcen=ss.convolve(vcen, np.ones((3,3)))/9
    print flux.mean(), np.median(flux), np.median(fstd)
    mask=(flux<np.median(flux)+5*np.median(fstd))
-   mask=(flux**0.5<15)
-   #vcen[mask]=np.nan
+   #mask=(flux**0.5<15)
+   vcen[mask]=np.nan
    #flux[mask]=np.nan
    #vcen[vcen>6724]=np.nan
    print vcen.max(), vcen.min()
    fig=pl.figure()
    ax=fig.add_subplot(111)
-   #cim=ax.imshow(vcen)
+   cim=ax.imshow(vcen)
    #cim=ax.imshow(vcen, vmin=6707, vmax=6722, origin='lower')
    #cim=ax.imshow(np.log10(flux))
    #cim = ax.imshow((flux+500)**0.5)
    #cbar = fig.colorbar(cim) # ticks=[-1, 0, 1])
-   #pl.show()
-
+   pl.show()
+   exit()
 
    s=abs(flux)/20.0+20**2 #variance on individual pixel
    s=s**0.5/abs(flux) 
