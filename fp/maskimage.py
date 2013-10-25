@@ -7,7 +7,7 @@ from scipy.signal import convolve
 
 
 
-def maskimage(data, axc, ayc, arad, nbins=50, thresh=3, maskval=0):
+def maskimage(data, axc, ayc, arad, nbins=50, thresh=3, maskval=None):
     yax,xax=data.shape
     mdata=1.0*data
     mdata=median_radial_mask(mdata, axc, ayc, arad, nbins, thresh, maskval)
@@ -41,7 +41,10 @@ def median_radial_mask(data, xc=0, yc=0, rmax=500, nbins=50, thresh=3, maskval=0
         mask=(radius>r-hbin)*(radius<r+hbin)
         m,s=iterstat(data[mask], thresh)
         rmask=mask*(abs(data-m)>thresh*s)
-        data[rmask]=maskval
+        if maskval is None:
+            data[rmask]=m
+        else:
+            data[rmask]=maskval
 
     return data
 
