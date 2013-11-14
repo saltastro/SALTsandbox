@@ -67,7 +67,7 @@ if __name__=='__main__':
        
        nobj=min(len(xb), max_nobj)
        
-       os.remove('out.coo')
+       if os.path.isfile('out.coo'): os.remove('out.coo')
        iraf.images.immatch.xyxymatch(txtcoo, refcoo, 'out.coo', 3)
            
        x1,y1,x2,y2=np.loadtxt('out.coo', usecols=(0,1,2,3), unpack=True)
