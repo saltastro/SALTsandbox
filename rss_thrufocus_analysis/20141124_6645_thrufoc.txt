@@ -1,0 +1,28 @@
+-khn-oderbolz-64-> thrufoc_rssimage.py 20141124_6645_thrufoc /d/rssdata/commission/20141124/product/*2[3-9].fits /d/rssdata/commission/20141124/product/*3[0-2].fits
+Distortion Fit for focus  557.0
+    pix grid0x   grid0y   dist0x   dist0y      A   rot(deg) gridsep(arcsec) 
+ start  -56.00    12.00    44.10    72.80   0.0143   0.0000    22.00
+ fit    -55.15     6.08    22.66   -38.79   0.0113   0.0401    22.18
+
+ image focus  spots
+   23     51   334
+   24    149   331
+   25    256   331
+   26    359   330
+   27    458   331
+   28    557   330
+   29    656   331
+   30    755   335
+   31    855   331
+   32    954   334
+
+Best focal plane          arcmin        turns in adj 
+         focus(micr)    tip    tilt      top   right  fwhm(arcsec) spots
+ longslit    443.7    -4.46  -26.72    -0.56   -3.99      0.42       39
+ imaging     418.8    -9.67  -28.05    -1.21   -4.19      0.46      330
+
+ Saving  ('theta', 'ellip', 'fwhm')  data cubes
+Overwriting existing file '20141124_6645_thrufoc_theta.fits'.
+Overwriting existing file '20141124_6645_thrufoc_ellip.fits'.
+Overwriting existing file '20141124_6645_thrufoc_fwhm.fits'.
+
