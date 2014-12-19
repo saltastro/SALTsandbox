@@ -19,6 +19,8 @@ class Blackhole:
         pass
 STDOUT = sys.stdout
 
+datadir = "/d/carol/Synched/software/SALT/pipeline/"    
+
 # ---------------------------------------------------------------------------------
 def sextract(fits,option=""):
 # run sextractor to find objects
@@ -31,7 +33,7 @@ def sextract(fits,option=""):
     pix_scale=0.125
     r_ap=2.0/(pix_scale*rcbin_d.min())         
     sat=0.99*image_rc.max()
-    cmd='sex %s -c $PYTHONPATH/qred.sex -CATALOG_NAME %s -DETECT_THRESH %f -PHOT_APERTURES %f -SATUR_LEVEL %f' \
+    cmd= ('sex %s -c '+datadir+'qred.sex -CATALOG_NAME %s -DETECT_THRESH %f -PHOT_APERTURES %f -SATUR_LEVEL %f') \
             % (fits, "out.txt", sigma, r_ap, sat)
     os.system(cmd+" &> /dev/null")
     sex_js = np.loadtxt("out.txt").transpose()
@@ -58,11 +60,10 @@ def thrufoc_rssimage(name,fitslist,option=""):
     sexcols = sex_js.shape[0]
 
 #   get first guess positions from distortion model
-    datadir = "/d/carol/Synched/software/SALT/pipeline/"    
+
     gridsep = 22.                                                               # arcsec spacing of mask grid
     fittol = 3e-3
     imgdist=np.loadtxt(datadir+"/spectrograph/imgdist.txt",usecols=(1,2))
-
     rcd_d = imgdist[1,::-1]                                                     # note backwards from file
     rd, A,B = imgdist[2,0],imgdist[3,0],imgdist[3,1]
     Fsclpoly=imgdist[4: ,0]
@@ -131,6 +132,9 @@ def thrufoc_rssimage(name,fitslist,option=""):
     niter = 0
     usespots_gg = (foundcount_gg == focposns) & ((args_gg[0] == gridsize/2) | (args_gg[1] == gridsize/2))
     fwhmdata_fg = sexdata_jfgg[10][:,usespots_gg]
+    argfmin_g = np.argmin(fwhmdata_fg,axis=0)
+    x0[1],x0[0] = np.polyfit(rc0_dgg[0,usespots_gg]-rc0_dgg[0,gridsize/2,gridsize/2],focus_f[argfmin_g],1)
+    x0[2],x0[0] = np.polyfit(rc0_dgg[1,usespots_gg]-rc0_dgg[1,gridsize/2,gridsize/2],focus_f[argfmin_g],1)
     fwhminterp_g = np.empty(usespots_gg.sum(),dtype='object')
     for g in range(usespots_gg.sum()): fwhminterp_g[g] = ip.interp1d(focus_f,fwhmdata_fg[:,g],kind ='cubic')
     sys.stdout = Blackhole()                                                       # suppress output of the fmin function
@@ -144,6 +148,9 @@ def thrufoc_rssimage(name,fitslist,option=""):
     niter = 0
     usespots_gg = (foundcount_gg == focposns)
     fwhmdata_fg = sexdata_jfgg[10][:,usespots_gg]
+    argfmin_g = np.argmin(fwhmdata_fg,axis=0)
+    x0[1],x0[0] = np.polyfit(rc0_dgg[0,usespots_gg]-rc0_dgg[0,gridsize/2,gridsize/2],focus_f[argfmin_g],1)
+    x0[2],x0[0] = np.polyfit(rc0_dgg[1,usespots_gg]-rc0_dgg[1,gridsize/2,gridsize/2],focus_f[argfmin_g],1)
     fwhminterp_g = np.empty(usespots_gg.sum(),dtype='object')
     for g in range(usespots_gg.sum()): fwhminterp_g[g] = ip.interp1d(focus_f,fwhmdata_fg[:,g],kind ='cubic')
     sys.stdout = Blackhole()                                                       
@@ -152,6 +159,22 @@ def thrufoc_rssimage(name,fitslist,option=""):
     arcmin_d = 60.*np.degrees(ximg[1:]/pixel)
     sys.stdout = STDOUT                                                            # Restore normal output     
     print " imaging  %8.1f " % ximg[0], 2*"%7.2f " % tuple(arcmin_d), \
+            2*"%7.2f " % tuple(arcmin_d/turnfac_d), "%8.2f %8i" % (rms, usespots_gg.sum())
+
+    niter = 0
+    usespots_gg = (foundcount_gg == focposns) & (np.sqrt((args_gg[0] - gridsize/2)**2 + (args_gg[1] - gridsize/2)**2) >= gridsize/2)
+    fwhmdata_fg = sexdata_jfgg[10][:,usespots_gg]
+    argfmin_g = np.argmin(fwhmdata_fg,axis=0)
+    x0[1],x0[0] = np.polyfit(rc0_dgg[0,usespots_gg]-rc0_dgg[0,gridsize/2,gridsize/2],focus_f[argfmin_g],1)
+    x0[2],x0[0] = np.polyfit(rc0_dgg[1,usespots_gg]-rc0_dgg[1,gridsize/2,gridsize/2],focus_f[argfmin_g],1)
+    fwhminterp_g = np.empty(usespots_gg.sum(),dtype='object')
+    for g in range(usespots_gg.sum()): fwhminterp_g[g] = ip.interp1d(focus_f,fwhmdata_fg[:,g],kind ='cubic')
+    sys.stdout = Blackhole()                                                       # suppress output of the fmin function
+    xrim = fmin(fwhmnet, x0, xtol=fittol)
+    rms = pixarcsec*fwhmnet(xrim)
+    arcmin_d = 60.*np.degrees(xrim[1:]/pixel)
+    sys.stdout = STDOUT  
+    print " maskrim  %8.1f " % xrim[0], 2*"%7.2f " % tuple(arcmin_d), \
             2*"%7.2f " % tuple(arcmin_d/turnfac_d), "%8.2f %8i" % (rms, usespots_gg.sum())
 
 #   write out fits cubes for selected data
