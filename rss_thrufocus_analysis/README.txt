@@ -1,20 +1,73 @@
-thrufoc_rssimage.py
+thrufoc_rssimage.py fitslist (filesave)
 
-    You will need to edit hardwired directory paths at line 61 and 64 of the .py 
-depending on where you want to put the distortion model data imgdist.txt. 
+Thru-focus analysis for any imaging mask
 
-The sample .txt shows you what I get when I run it on the 20141124 6645 filter 
-thrufocus data from 1124. On my machine, this takes about 2 minutes. Basically, 
-the program looks at the middle image in the run to make an updated distortion 
-map using a SExtraction of the grid spots, then SExtracts those spots from all 
-the images, forming a cube of SExtractor data versus row and column. "spots" is 
-the number of spots found. There are actually 330 of them, so the spurious ones 
-are thrown out, if necessary. Then it cubic-spline interpolates in the fwhm 
-cube to calculate the rss mean of fwhm over a plane, and varies focus, tip, and 
-tilt to minimize it. This is for two cases, one using grid points in a cross on 
-the x and y axis, for longslit work, and the other using the whole grid to get 
-the imaging optimum. (Presumably you want longslit, since that mode is most 
-sensitive to focus). You can see that it advises a tilt adjustment of about 4 
-turns, in the negative sense, so the right side of the detector should come 
-out. One would like to get the suggested adjustments down to less than a turn 
-or so. 
+    fitslist: unix commandline list of fits files 
+    option : if optional last argument = "filesave", text files are saved: 
+      "(prefix)_cull.txt" contains the cull status of each star in each image (see source 
+      for key), and "(prefix)_focplane.txt" contains the focus shift for each good focus 
+      curve. The file name prefix is requested. 
+
+You will need to edit hardwired directory path "datadir" at line 14 of 
+thrufoc_rssimage.py. Then put qred.sex there. 
+
+The samples 20141124_6645_N99_thrufoc.txt and 20111105_open_thrufoc.txt show you what I 
+get when I run it on the 20141124 6645 filter thrufocus data taken with the "N99" 
+cartesian mask and on 20111105 thrufocus on sky (no mask) (Note that the 1105 run has 
+an incorrect indication of mask of PL0060N001 - the fits header is incorrect and should 
+read P00000N00. The mask, filter, and temperature data at the top are for information 
+only, and are not used by the program). On my machine, this takes about 4 minutes. 
+Basically, the program looks at all the images in the run using SExtractor, then 
+identifies those spots with the spots found in the middle image to make a map of focus 
+curves. "spots" is the total number of spots found in each image. "rshift" and "cshift" 
+is the row and column shift in arcsec of each image from the central image (note the 
+guiding drift in the open mask run). "xfwhm", "yfwhm", and "fwhm" is the median fwhm in 
+arcsec for each image, so you can see the rough position of best focus. "rmserr" is the 
+rms error in bins in the spot positions, relative to the central image. The spots are 
+then put though a culling process to remove close doubles, objects too faint, 
+odd-shaped objects, ones too near the gaps and the edge of field, and finally, objects 
+which have fewer than half the focus points in a curve or which are abnormally big 
+(i.e., galaxies in the open mask thru-focus). Then it gets a focus shift for each focus 
+curve by minimizing the rms difference to the median focus curve as a function of focal 
+shift. Finally, it fits the focus shift as a function of position with a plane to 
+obtain the mean central focus, tip, and tilt (with errors), then with a second-order 
+polynomial to obtain a curvature and the tilt and tip of the focal plane at the edge of 
+the field of view (ie, the orientation of the mask frame). 
+
+No advice on detector alignment is now given, since I find that the focal plane 
+orientation for imaging with masks is dominated by the mask mounting error.
+
+--------------------------------------------------------------------------------------
+thrufoc_rssspec.py fitslist (filesave)
+
+Thru-focus analysis for longslit spectroscopy
+
+    fitslist: unix commandline list of fits files
+    option : if optional last argument = "filesave", a text file "(prefix)_focplane.txt"
+      is saved containing the smoothed focus shift for each line.  The file name prefix 
+      is requested. 
+
+    You will need to edit hardwired directory path "datadir" at line 22 of 
+thrufoc_rssspec.py. Then put qred.sex there, create a subdirectory "spectrograph" 
+there, and put spec.txt, gratings.txt, and specfocus.txt in that subdirectory. 
+
+The samples 20141122_1800Ne_thrufoc.txt and 20141122_2300Ne_thrufoc.txt show you what I 
+get when I run it on longslit thru-focus runs taken on 20141122 with the Ne lamp 
+through the 1800 and 2300 l/mm gratings. On my machine, this takes less than one 
+minute. The program looks at the center image in the focus run and finds the brightest 
+lines in each of the six ccd amplifiers, derives a wavelength for each using the 
+spectrograph model (good enough to be within a few Angstroms), and predicts the best 
+focus for that line using the grating, wavelength, and temperature, and the same focus 
+model used on PCON. Then it looks at each focus image and derives the line width as a 
+function of column, printing out the mean width for each line, so you can see the rough 
+best-focus. Each line now has a focus curve as a function of column, which is 
+block-averaged and spline-interpolated into a smooth curve. The best focus, tip and tip 
+curvature of the focal curve of each line is computed from this, and, comparing those, 
+the tilt and tilt curvature. The tilt is relative to the *expected* tilt derived from 
+the spectrograph model, so all grating configurations should nominally give the same 
+tilt. The exception to this is the 2300 l/mm grating, which has appreciable VPH-induced 
+focal power, casing its spectral tilt to deviate from the other gratings by about 4 
+arcmin. 
+
+At the very bottom, advice is given on the screw adjustments for the detector which 
+would zero out the tilt and tip errors.
