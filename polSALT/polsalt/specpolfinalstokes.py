@@ -35,7 +35,6 @@ def specpolfinalstokes(infile_list,propid,logfile):
     calversion = open(datadir+'polcal.txt', 'r').readlines()[1][2:].rstrip()
 
     with logging(logfile, debug) as log:
-        log.message('Calibration Version: '+calversion, with_header=False)
         
     # organize data using names
         files = len(infile_list)
@@ -60,6 +59,17 @@ def specpolfinalstokes(infile_list,propid,logfile):
         comblist = []
         for j in range(rawstokes):
             i,object,config,wvplt,count = rawlist[j]
+            if j==0:
+                lampid = pyfits.getheader(infile_list[i],0)['LAMPID'].strip().upper()
+                telpa = float(pyfits.getheader(infile_list[i],0)['TELPA'])
+                if lampid=="NONE":
+                    pacaltype = "Equatorial"
+                    hpa_l -= (telpa % 180)
+                else:
+                    pacaltype ="Instrumental"
+                calversion = (pacaltype+'  '+calversion)
+                log.message('Calibration Version: '+calversion, with_header=False) 
+           
             wppat = pyfits.getheader(infile_list[i],0)['WPPATERN']
             wav0 = pyfits.getheader(infile_list[i],'SCI')['CRVAL1']
             dwav = pyfits.getheader(infile_list[i],'SCI')['CDELT1']
@@ -68,12 +78,13 @@ def specpolfinalstokes(infile_list,propid,logfile):
             bpm_jsw[j] = pyfits.open(infile_list[i])['BPM'].data.reshape((2,-1))
             wav_jw[j] = np.mgrid[wav0:(wav0+cols*dwav):dwav]
             if int(count)==1:
-                comblist.append([j,object,config,wvplt,count,wppat])
+                comblist.append((j,object,config,wvplt,count,wppat))
             else:
                 comblist[-1] = (j,object,config,wvplt,count,wppat)
 
     # combine multiple instances (count > 1)
         combstokes = len(comblist)
+
         stokes_ksw = np.zeros((combstokes,2,cols)); 
         var_ksw = np.zeros_like(stokes_ksw)
         bpm_ksw = np.zeros_like(stokes_ksw).astype(int)
@@ -98,6 +109,8 @@ def specpolfinalstokes(infile_list,propid,logfile):
                     errstokes_w[bok] =  np.sqrt(var_jsw[jj,1,bok]/(stokes_jsw[jj,0,bok])**2)
                     chisqstokes_kw[k,bok] += ((stokes_w[bok]-combstokes_w[bok])/errstokes_w[bok])**2
                 chisqstokes_kw[k] /= int(count)-1
+                chisqstokes = chisqstokes_kw[k].sum()/bok.sum()
+                log.message("Chisq/dof Filter Pair %s: %7.2f" % (wvplt,chisqstokes), with_header=False)
             if ((object != obsobject) | (config != obsconfig)):
                 obslist.append([k,object,config,wppat,1])
                 obsobject = object; obsconfig = config
@@ -129,6 +142,8 @@ def specpolfinalstokes(infile_list,propid,logfile):
                     nstokes_fw = np.zeros((finstokes,cols)); nvar_fw = np.zeros((finstokes+1,cols))
                     nstokes_pw[:,wok] = stokes_ksw[k:k+pairs,1,wok]/stokes_ksw[k:k+pairs,0,wok]
                     nvar_pw[:,wok] = var_ksw[k:k+pairs,1,wok]/(stokes_ksw[k:k+pairs,0,wok])**2
+                    np.savetxt("nstokes.txt",np.vstack((wok.astype(int),nstokes_pw)).T,fmt="%3i "+4*"%10.6f ")
+                    np.savetxt("nvar.txt",np.vstack((wok.astype(int),nvar_pw)).T,fmt="%3i "+4*"%14.9f ")
                     nstokes_fw[1] = 0.5*(nstokes_pw[0] + (nstokes_pw[1]-nstokes_pw[3])/np.sqrt(2.))
                     nstokes_fw[2] = 0.5*(nstokes_pw[2] + (nstokes_pw[1]+nstokes_pw[3])/np.sqrt(2.))
                     nvar_fw[1] = 0.25*(nvar_pw[0] + (nvar_pw[1]+nvar_pw[3])/2.)
@@ -136,11 +151,9 @@ def specpolfinalstokes(infile_list,propid,logfile):
                     nvar_fw[3] = 0.25*((nvar_pw[1] - nvar_pw[3])/2.)
                     stokes_fw[1:] = nstokes_fw[1:]*stokes_fw[0]
                     var_fw[1:] = nvar_fw[1:]*stokes_fw[0]**2
-                    chisqq = 0.5*((nstokes_pw[0,wok] - (nstokes_pw[1,wok]-nstokes_pw[3,wok])/np.sqrt(2.))**2    \
-                                /nvar_fw[1,wok]).sum()/wok.sum() 
-                    chisqu = 0.5*((nstokes_pw[2,wok] - (nstokes_pw[1,wok]+nstokes_pw[3,wok])/np.sqrt(2.))**2    \
-                                /nvar_fw[2,wok]).sum()/wok.sum()
-                    log.message("Linear-Hi Chisq/dof Q,U: %8.2f %8.2f" % (chisqq,chisqu), with_header=False) 
+                    chisqq = ((nstokes_pw[0,wok] - nstokes_fw[1,wok])**2/nvar_fw[1,wok]).sum()/wok.sum() 
+                    chisqu = ((nstokes_pw[2,wok] - nstokes_fw[2,wok])**2/nvar_fw[2,wok]).sum()/wok.sum()
+                    log.message("Chisq/dof Linear-Hi Q,U: %7.2f %7.2f" % (chisqq,chisqu), with_header=False) 
                 heff_w = interp1d(wav_l,heff_l,kind='cubic')(wav_kw[k])
                 par_w = -interp1d(wav_l,hpa_l,kind='cubic')(wav_kw[k])
                 c_w = np.cos(2.*np.radians(par_w)); s_w = np.sin(2.*np.radians(par_w))
