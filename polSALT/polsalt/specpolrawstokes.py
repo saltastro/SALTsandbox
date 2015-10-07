@@ -16,7 +16,6 @@ from pyraf import iraf
 from iraf import pysalt
 from saltobslog import obslog
 from saltsafelog import logging
-from scrunch1d import scrunch1d
 
 import reddir
 datadir = os.path.dirname(inspect.getfile(reddir))+"/data/"
@@ -48,7 +47,7 @@ def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
 
     # make table of observations
 
-        objects = 0; configs = 0; obss = 0
+        configs = 0; obss = 0
         for i in range(images):
             if object_i[i].count('NONE'): object_i[i] = obs_dict['LAMPID'][i]
             object_i[i] = object_i[i].replace(' ','')
@@ -67,7 +66,7 @@ def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
                 config += 1
             if config == configs: confdat_cd.append(confdat_d)
             config_i[i] = config
-            obss = len(obsdat_od); obs = 1
+            obss = len(obsdat_od); obs = 0
             while obs<obss:
                 if obsdat_d == obsdat_od[obs]: break
                 obs += 1
@@ -80,7 +79,7 @@ def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
 
     # Compute E-O raw stokes
 
-        for obs in range(1,obss):
+        for obs in range(obss):
             idx_j = np.where(obs_i == obs)
             i0 = idx_j[0][0]
             name_n = []
@@ -111,37 +110,17 @@ def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
                     if (np.where(wpat_dp[0::2]==(hsta_i[i],qsta_i[i]))[0].size > 0): 
                         idxp = np.where(wpat_dp==(hsta_i[i],qsta_i[i]))[0][0]
                         if (hsta_i[i+1],qsta_i[i+1]) != wpat_dp[None,idxp+1]: continue
-                    else: continue    
-
-            # rectify into wavelength space to allow for o-e combination
-            # base wavelength grid on first O,E beam overlap; will be the same for whole pattern
-
-                if stokes==0:           
-                    cols = pyfits.getheader(infile_list[i],'SCI',1)['NAXIS1']
-                    wavmin_o = np.zeros(2);   wavmax_o = np.zeros(2)  
-                    wav_oc = pyfits.open(infile_list[i])['WAV'].data.reshape((2,-1))
-                    wavbin = wav_oc[0,cols/2]-wav_oc[0,cols/2-1] 
-                    wavbin = float(int(wavbin/0.75))
-                    for o in (0,1):
-                        okcol = wav_oc[o] > 0.
-                        wavmin_o[o] = int(wav_oc[o,okcol].min()/(wavbin/2.))*(wavbin/2.)
-                        wavmax_o[o] = int(wav_oc[o,okcol].max()/(wavbin/2.))*(wavbin/2.)
-                    wavedgemin = wavmin_o.max() + ((wavmin_o.max() % wavbin) + wavbin/2.)
-                    wavedgemax = wavmax_o.min() + ((wavmin_o.min() % wavbin) - wavbin/2.)
-                    wavedge_w = np.arange(wavedgemin,wavedgemax+wavbin,wavbin)
-                    wavs = wavedge_w.shape[0] - 1
-                    binedge_ow = np.zeros((2,wavs+1))
-                    for o in (0,1):
-                        okcol = wav_oc[o] > 0.
-                        binedge_ow[o] = interp1d(wav_oc[o,okcol],np.where(okcol)[0])(wavedge_w)
-  
-                sci_fow = np.zeros((2,2,wavs)); var_fow = np.zeros_like(sci_fow);   bpm_fow = np.zeros_like(sci_fow) 
+                    else: continue
+    
+                if stokes==0:
+                    wavs = pyfits.getheader(infile_list[i],'SCI',1)['NAXIS1']
+                sci_fow = np.zeros((2,2,wavs)); var_fow = np.zeros_like(sci_fow);   \
+                                                bpm_fow = np.zeros_like(sci_fow) 
                 for f in (0,1):
                     hdulist = pyfits.open(infile_list[i+f])
-                    for o in (0,1):
-                        sci_fow[f,o] = scrunch1d(hdulist['sci'].data[o],binedge_ow[o])
-                        var_fow[f,o] = scrunch1d(hdulist['var'].data[o],binedge_ow[o])
-                        bpm_fow[f,o] = (scrunch1d(hdulist['bpm'].data[o],binedge_ow[o]) > 0).astype(int)
+                    sci_fow[f] = hdulist['sci'].data.reshape((2,-1))
+                    var_fow[f] = hdulist['var'].data.reshape((2,-1))
+                    bpm_fow[f] = hdulist['bpm'].data.reshape((2,-1))
 
                 bpm_w = (bpm_fow.sum(axis=0).sum(axis=0) > 0).astype(int)
                 wok = (bpm_w==0)
@@ -164,7 +143,8 @@ def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
                 name = object_i[i] + '_c' + str(config_i[i]) + '_h' + str(hsta_i[i]) + str(hsta_i[i+1])
                 if (wpstate_i[i]=='hqw'):
                     name += 'q'+['m','p'][qsta_i[i]==4]+['m','p'][qsta_i[i+1]==4]
-                count = name_n.count(name)
+
+                count = " ".join(name_n).count(name)
                 name += ('_%02i' % (count+1))
  
                 log.message('%20s  %1i  %1i %1i %8s %8.2f %8.2f %12s' % \
@@ -174,13 +154,8 @@ def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
                 hduout = pyfits.HDUList(hduout)
                 hduout[0].header.update('WPPATERN',wppat_i[i])
                 header=hdulist['SCI'].header.copy()
-                del header['WAVEXT']
                 header.update('VAREXT',2)
                 header.update('BPMEXT',3)
-                header.update('CRVAL1',wavedge_w[0]+wavbin/2.)
-                header.update('CRVAL2',0)
-                header.update('CDELT1',wavbin)
-                header.update('CTYPE1','Angstroms')
                 header.update('CTYPE3','I,S')
                 hduout.append(pyfits.ImageHDU(data=stokes_sw.reshape((2,1,wavs)), header=header, name='SCI'))
                 header.update('SCIEXT',1,'Extension for Science Frame',before='VAREXT')

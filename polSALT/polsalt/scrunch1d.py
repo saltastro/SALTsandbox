@@ -1,45 +1,40 @@
 #! /usr/bin/env python
 
 # Resample data into new bins, preserving flux
+# New version 150912, much faster
 
 import os, sys, time, glob, shutil
 import numpy as np
-import pyfits
-WCSHdr = ['CRPIX1','CRPIX2','CRVAL1','CRVAL2','CDELT1','CDELT2','CTYPE1','CTYPE2','CUNIT1','CUNIT2']
 
-def scrunch1d(input_a,binedge_x):
+def scrunch1d(input,binedge):
+# new binedges are in coordinate system x where the left edge of the 0th input bin is at 0.0
+    na = input.size
+    nx = binedge.size - 1
+    input_a = np.append(input,0)                         # deal with edge of array
+    binedge_x = binedge.clip(0,na)                       # deal with edge of array
+    output_x = np.zeros(nx)
 
-    na = input_a.size
-    nx = binedge_x.size - 1
+# _s is list of subbins divided by both new and old bin edges
+    x_s = np.append(binedge_x,range(int(binedge_x.min())+1,int(binedge_x.max()+1)))
+    x_s,argsort_x = np.unique(x_s,return_index=True)
+    ia_s = x_s.astype(int)
+    ix_s = np.append(np.arange(nx+1),-1*np.ones(na+1))[argsort_x].astype(int)
+    while (ix_s==-1).sum():
+        ix_s[ix_s==-1] = ix_s[np.where(ix_s==-1)[0] - 1]
 
-    inputT_a = np.append(input_a,0)                         # deal with edge of array
-    binedgeT_x = np.maximum(0.,np.minimum(na,binedge_x))    # deal with edge of array
+# divide data into subbins, preserving flux
+    input_s = input_a[ia_s[:-1]]*(x_s[1:] - x_s[:-1])
+    ix_x, s_x = np.unique(ix_s,return_index=True)
+    ns_x = s_x[1:] - s_x[:-1]
 
-    ns = na+nx+1
-    ia_s = np.append(binedgeT_x,range(na+1))
-    ix_s = np.zeros_like(ia_s) - 1
-    ix_s[0:nx+1] = np.arange(nx+1)
-    ia_argsort_s = np.argsort(ia_s)
-    ia_s = ia_s[ia_argsort_s]
-    origin_s = ia_s.astype(int)[0:ns]
-    value_s = inputT_a[origin_s]*(ia_s[1:ns+1] - ia_s[0:ns])
-    destination_s = ix_s[ia_argsort_s].astype(int)[0:ns]
-    destination_s = np.maximum.accumulate(destination_s)
-    ix_x = np.arange(nx)    
-    output_x = np.where(destination_s == ix_x[:,None],value_s,0).sum(axis=1)
+# sum it into the new bins
+    for s in range(ns_x.max()):
+        output_x[ns_x > s] += input_s[s_x[ns_x > s]+s]
+
     return output_x
 
-def scrunch1dtest(inputfile,binedgefile):
-    input_a = np.loadtxt(inputfile)
-    print input_a, input_a.sum()
-    binedge_x = np.loadtxt(binedgefile)
-    print binedge_x
-    output_x = scrunch1D(input_a,binedge_x)
-    print output_x, output_x.sum()
-    return
-
 if __name__=='__main__':
-    inputfile=sys.argv[1]
-    binedgefile=sys.argv[2]
-    scrunch1dtest(inputfile,binedgefile)
-
+    input=np.loadtxt(sys.argv[1])
+    binedge=np.loadtxt(sys.argv[2])
+#    for n in range(1000): scrunch1d(input,binedge)
+    np.savetxt('outputfile.txt',scrunch1d(input,binedge),fmt="%14.8f")

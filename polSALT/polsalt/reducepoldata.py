@@ -1,13 +1,15 @@
 import os, sys, glob
-reddir = '[PATHTOPOLSALT]/polSALT/polsalt/'
-propid = '[PROPID]'
+reddir = '/d/carol/Synched/software/SALT/sandboxcopy/polSALT/polsalt/'
+propid = 'NORDSIECK'
 
 sys.path.append(reddir)
 datadir = reddir+'data/'
+import numpy as np
+import pyfits
 
 from imred import imred
 
-from specpolmap import specpolmap
+from specpolwavmap import specpolwavmap
 from specpolextract import specpolextract
 from specpolrawstokes import specpolrawstokes
 from specpolfinalstokes import specpolfinalstokes
@@ -26,17 +28,17 @@ imred(infile_list, './', datadir+'bpm_rss_11.fits', cleanup=True)
 logfile='specpol'+obsdate+'.log'
 
 #target and wavelength map
-infile_list = glob.glob('m*fits')
-specpolmap(infile_list, propid, inter=True, logfile=logfile)
+infile_list = sorted(glob.glob('m*fits'))
+specpolwavmap(infile_list, propid, inter=True, logfile=logfile)
 
 #background subtraction and extraction
-infile_list = glob.glob('w*fits')
+infile_list = sorted(glob.glob('w*fits'))
 specpolextract(infile_list, propid, logfile=logfile)
 
 #raw stokes
-infile_list = glob.glob('e*fits')
+infile_list = sorted(glob.glob('e*fits'))
 specpolrawstokes(infile_list, propid, logfile=logfile)
 
 #final stokes
-infile_list = glob.glob('*_h*.fits')
+infile_list = sorted(glob.glob('*_h*.fits'))
 specpolfinalstokes(infile_list, propid, logfile=logfile)

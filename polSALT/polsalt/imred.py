@@ -25,6 +25,7 @@ from scipy.ndimage.filters import median_filter
 from pyraf import iraf
 from iraf import pysalt
 
+from saltsafelog import logging
 from saltobslog import obslog
 from saltprepare import *
 from saltbias import saltbias
@@ -35,6 +36,7 @@ from saltcombine import saltcombine
 from saltflat import saltflat
 from saltmosaic import saltmosaic
 from saltillum import saltillum
+debug = True
 
 import reddir
 datadir = os.path.dirname(inspect.getfile(reddir))+"/data/"
@@ -56,6 +58,8 @@ def imred(infile_list, prodir, bpmfile=None, gaindb = None, cleanup=True):
     #create the observation log
     obs_dict=obslog(infile_list)
 
+    with logging(logfile, debug) as log:
+        log.message('Pysalt Version: '+pysalt.verno, with_header=False)
  
     #prepare the data
     saltprepare(infiles, '', 'p', createvar=False, badpixelimage='', clobber=True, logfile=logfile, verbose=True)
@@ -110,6 +114,7 @@ def imred(infile_list, prodir, bpmfile=None, gaindb = None, cleanup=True):
     #    if (int(obsdate) > int(geomline.split(' ')[0].replace('-',''))): break
     #geomfile = "RSSgeom_obsdate.dat"
     #open(geomfile,'w').write(geomline)
+    geomfile=iraf.osfn("pysalt$data/rss/RSSgeom.dat")
     
     try:
        saltmosaic('xgbpP*fits', '', 'm', geomfile, interp='linear', cleanup=True, geotran=True, clobber=True, logfile=logfile, verbose=True)
