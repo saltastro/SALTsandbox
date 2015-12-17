@@ -22,7 +22,7 @@ datadir = os.path.dirname(inspect.getfile(reddir))+"/data/"
 np.set_printoptions(threshold=np.nan)
 debug = True
 
-def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
+def specpolrawstokes(infile_list, logfile='salt.log'):
     #set up some files that will be needed
     obsdate=os.path.basename(infile_list[0]).split('.')[0][-12:-4]
 
@@ -43,15 +43,21 @@ def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
 
         object_i = obs_dict['OBJECT']
         config_i = np.zeros(images,dtype='int')
-        obs_i = np.zeros(images,dtype='int')
+        obs_i = -np.ones(images,dtype='int')
 
     # make table of observations
 
         configs = 0; obss = 0
         for i in range(images):
+            if (wpstate_i[i] == 'unknown'):
+                log.message('Warning: Image %s WP-STATE UNKNOWN, assume it is 3 (HW)' % img_i[i] , with_header=False)
+                wpstate_i[i] = 'hw'
+            elif (wpstate_i[i] == 'out'):
+                log.message('Image %i not in a WP pattern, will skip' % img_i[i] , with_header=False)
+                continue                  
             if object_i[i].count('NONE'): object_i[i] = obs_dict['LAMPID'][i]
             object_i[i] = object_i[i].replace(' ','')
-            rbin,cbin = np.array(obs_dict["CCDSUM"][i].split(" ")).astype(int)
+            cbin,rbin = np.array(obs_dict["CCDSUM"][i].split(" ")).astype(int)
             grating = obs_dict['GRATING'][i].strip()
             grang = float(obs_dict['GR-ANGLE'][i])
             artic = float(obs_dict['CAMANG'][i])
@@ -98,6 +104,7 @@ def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
                 if (p.split()[0]==wppat_i[i0])&(p.split()[2]=='qwp'): 
                     wpat_dp = np.vstack(wpat_p,np.array(p.split()[3:])) 
             stokes=0; j=-1
+
             while j < (len(idx_j[0])-2):
                 j += 1
                 i = idx_j[0][j]
@@ -122,11 +129,12 @@ def specpolrawstokes(infile_list, propcode=None, logfile='salt.log'):
                     var_fow[f] = hdulist['var'].data.reshape((2,-1))
                     bpm_fow[f] = hdulist['bpm'].data.reshape((2,-1))
 
+            # compute intensity, E-O stokes spectrum, VAR, BPM.
+            # fits out: unnormalized (int,stokes),(length 1) spatial,wavelength
+            # wavelength marked bad if it is bad in either filter or order  
+
                 bpm_w = (bpm_fow.sum(axis=0).sum(axis=0) > 0).astype(int)
                 wok = (bpm_w==0)
-
-            # compute intensity, E-O stokes spectrum, VAR, BPM.  
-            # fits out: unnormalized (int,stokes),(length 1) spatial,wavelength
 
                 stokes_sw = np.zeros((2,wavs),dtype='float32');  var_sw = np.zeros_like(stokes_sw)
                 stokes_sw[0,wok] = 0.5*sci_fow[:,:,wok].reshape((2,2,-1)).sum(axis=0).sum(axis=0)
