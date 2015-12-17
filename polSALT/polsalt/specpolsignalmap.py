@@ -20,7 +20,7 @@ from scipy import linalg as la
 import reddir
 datadir = os.path.dirname(inspect.getfile(reddir))+"/data/"
 
-from blksmooth2d import blksmooth2d
+from oksmooth import boxsmooth1d,blksmooth2d
 from pyraf import iraf
 from iraf import pysalt
 from saltobslog import obslog
@@ -34,19 +34,25 @@ debug = True
 def specpolsignalmap(hdu,logfile=sys.stdout):
 
     with logging(logfile, debug) as log:
-        sci_orc = hdu['sci'].data
-        var_orc = hdu['var'].data
-        isbadbin_orc = hdu['bpm'].data > 0
-        wav_orc = hdu['wav'].data
+        sci_orc = hdu['sci'].data.copy()
+        var_orc = hdu['var'].data.copy()
+        isbadbin_orc = (hdu['bpm'].data > 0)
+        wav_orc = hdu['wav'].data.copy()
 
         lam_m = np.loadtxt(datadir+"wollaston.txt",dtype=float,usecols=(0,))
         rpix_om = np.loadtxt(datadir+"wollaston.txt",dtype=float,unpack=True,usecols=(1,2))
 
     # trace spectrum, compute spatial profile 
         rows,cols = sci_orc.shape[1:3]
-        rbin,cbin = np.array(hdu[0].header["CCDSUM"].split(" ")).astype(int)
+        cbin,rbin = np.array(hdu[0].header["CCDSUM"].split(" ")).astype(int)
+        slitid = hdu[0].header["MASKID"]
+        if slitid[0] =="P": slitwidth = float(slitid[2:5])/10.
+        else: slitwidth = float(slitid)
+        profsmoothfac = 2.5                     # profile smoothed by slitwidth*profsmoothfac
+
         lam_c = wav_orc[0,rows/2]
         profile_orc = np.zeros_like(sci_orc)
+        profilesm_orc = np.zeros_like(sci_orc)
         drow_oc = np.zeros((2,cols))
         expectrow_oc = np.zeros((2,cols),dtype='float32')
         maxrow_oc = np.zeros((2,cols),dtype=int); maxval_oc = np.zeros((2,cols),dtype='float32')
@@ -54,7 +60,9 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
         cross_or = np.sum(sci_orc[:,:,cols/2-cols/16:cols/2+cols/16],axis=2)
         
         okprof_oyc = np.ones((2,rows,cols),dtype='bool')
+        okprofsm_oyc = np.ones((2,rows,cols),dtype='bool')
         profile_oyc = np.zeros_like(profile_orc)
+        profilesm_oyc = np.zeros_like(profile_orc)
         isbadbin_oyc = np.zeros_like(isbadbin_orc)
         var_oyc = np.zeros_like(var_orc)
         wav_oyc = np.zeros_like(wav_orc)
@@ -76,26 +84,40 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
             okprof_c = (maxval_oc[o] != 0)
             drow2_c = np.polyval(np.polyfit(np.where(okprof_c)[0],drow1_c[okprof_c],3),(range(cols)))
             okprof_c &= np.abs(drow2_c - drow1_c) < 3
-            norm_rc = np.zeros((rows,cols))
+            norm_rc = np.zeros((rows,cols));    normsm_rc = np.zeros((rows,cols))
             for r in range(rows):
                 norm_rc[r] = interp1d(wav_orc[o,trow_o[o],okprof_c],maxval_oc[o,okprof_c], \
                     bounds_error = False, fill_value=0.)(wav_orc[o,r])
             okprof_rc = (norm_rc != 0.)
+
+        # make a slitwidth smoothed norm and profile for the background area
+            for r in range(rows):
+                normsm_rc[r] = boxsmooth1d(norm_rc[r],okprof_rc[r],(8.*slitwidth*profsmoothfac)/cbin,0.5)
+            okprofsm_rc = (normsm_rc != 0.)
             profile_orc[o,okprof_rc] = sci_orc[o,okprof_rc]/norm_rc[okprof_rc]
+            profilesm_orc[o,okprofsm_rc] = sci_orc[o,okprofsm_rc]/normsm_rc[okprofsm_rc]
             var_orc[o,okprof_rc] = var_orc[o,okprof_rc]/norm_rc[okprof_rc]**2
             drow_oc[o] = -(expectrow_oc[o] - expectrow_oc[o,cols/2] + drow2_c -drow2_c[cols/2])
 
         # take out profile spatial curvature and tilt (r -> y)
-
             for c in range(cols):
                 profile_oyc[o,:,c] = shift(profile_orc[o,:,c],drow_oc[o,c],order=1)
+                profilesm_oyc[o,:,c] = shift(profilesm_orc[o,:,c],drow_oc[o,c],order=1)
                 isbadbin_oyc[o,:,c] = shift(isbadbin_orc[o,:,c].astype(int),drow_oc[o,c],cval=1,order=1) > 0.1
                 var_oyc[o,:,c] = shift(var_orc[o,:,c],drow_oc[o,c],order=1)
                 wav_oyc[o,:,c] = shift(wav_orc[o,:,c],drow_oc[o,c],order=1)
             okprof_oyc[o] = ~isbadbin_oyc[o] & okprof_rc
+            okprofsm_oyc[o] = ~isbadbin_oyc[o] & okprofsm_rc
+
+#        pyfits.PrimaryHDU(norm_rc.astype('float32')).writeto('norm_rc.fits',clobber=True)
+#        pyfits.PrimaryHDU(normsm_rc.astype('float32')).writeto('normsm_rc.fits',clobber=True)
+#        pyfits.PrimaryHDU(profile_orc.astype('float32')).writeto('profile_orc.fits',clobber=True)
+#        pyfits.PrimaryHDU(profilesm_orc.astype('float32')).writeto('profilesm_orc.fits',clobber=True)
+#        pyfits.PrimaryHDU(profilesm_oyc.astype('float32')).writeto('profilesm_oyc.fits',clobber=True) 
             
     # Find, mask off fov edge (profile and image), including possible beam overlap
-        profile_oy = np.median(profile_oyc,axis=-1)
+        profile_oy = np.median(profilesm_oyc,axis=-1)
+        np.savetxt('profile_oy.txt',profile_oy.T,fmt="%10.5f")
         edgerow_od = np.zeros((2,2),dtype=int)
         isbadrow_oy = np.zeros((2,rows),dtype=bool)
         axisrow_o = np.zeros(2)
@@ -124,31 +146,30 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
         for b in (0,1): okprof_oyc &= ~((wav_oyc>ABband[b,0])&(wav_oyc<ABband[b,1]))
 
         profile_oyc *= okprof_oyc
+        profilesm_oyc *= okprofsm_oyc
 
-    # Stray light search by looking for features in spatial profile of ghost filter                   
+    # Stray light search by looking for seeing-sized features in spatial and spectral profile                   
         profile_Y = 0.5*(profile_oy[0,trow_o[0]-16:trow_o[0]+17] + \
                         profile_oy[1,trow_o[1]-16:trow_o[1]+17])
         profile_Y = interp1d(np.arange(-16.,17.),profile_Y,kind='cubic')(np.arange(-16.,16.,1./16))
-
-        fwhm = (np.argmax(profile_Y[256:]<0.5) + np.argmax(profile_Y[256:0:-1]<0.5))/16.
+        fwhm = 3.*(np.argmax(profile_Y[256:]<0.5) + np.argmax(profile_Y[256:0:-1]<0.5))/16.
         kernelcenter = np.ones(np.around(fwhm/2)*2+2)
         kernelbkg = np.ones(kernelcenter.shape[0]+4)
         kernel = -kernelbkg*kernelcenter.sum()/(kernelbkg.sum()-kernelcenter.sum())
-        kernel[2:-2] = kernelcenter                # ghost search kernel is size of fwhm and sums to zero
-        ghost_oyc = convolve1d(profile_oyc,kernel,axis=1,mode='constant',cval=0.)
-        isbadghost_oyc = (~okprof_oyc | isbadbin_oyc | isnewbadbin_oyc)     
+        kernel[2:-2] = kernelcenter                # ghost search kernel is size of 3*fwhm and sums to zero
 
+    # First, look for second order as feature in spatial direction
+        ghost_oyc = convolve1d(profilesm_oyc,kernel,axis=1,mode='constant',cval=0.)
+        isbadghost_oyc = (~okprofsm_oyc | isbadbin_oyc | isnewbadbin_oyc)     
         isbadghost_oyc |= convolve1d(isbadghost_oyc.astype(int),kernelbkg,axis=1,mode='constant',cval=1) != 0
         for o in(0,1): isbadghost_oyc[o,trow_o[o]-3*fwhm/2:trow_o[o]+3*fwhm/2,:] = True
-
         ghost_oyc *= (~isbadghost_oyc).astype(int)                
-        stdghost_oy = np.std(ghost_oyc,axis=-1)
-        stdghost = np.median(stdghost_oy)
+        stdghost_oc = np.std(ghost_oyc,axis=1)
         boxbins = (int(2.5*fwhm)/2)*2 + 1
         boxrange = np.arange(-int(boxbins/2),int(boxbins/2)+1)
 
-    # Search for second order in ghost filter
-        col_C = np.arange(np.argmax(wav_oyc[0,trow_o[0]]/2. > lam_m[0]),cols)
+    # _C: columns where second order is possible
+        col_C = np.arange(np.argmax(lam_c/2. > lam_m[0]),cols)  
         is2nd_oyc = np.zeros((2,rows,cols),dtype=bool)
         row2nd_oYC = np.zeros((2,boxbins,col_C.shape[0]),dtype=int)
 
@@ -156,10 +177,11 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
             row2nd_C = np.around(trow_o[o] + (interp1d(lam_m,rpix_om[o],kind='cubic')(lam_c[col_C]/2.)  \
                 - interp1d(lam_m,rpix_om[o],kind='cubic')(lam_c[col_C]))/rbin).astype(int)
             row2nd_oYC[o] = row2nd_C + boxrange[:,None]
-            is2nd_oyc[o][row2nd_oYC[o],col_C] = ghost_oyc[o][row2nd_oYC[o],col_C] > 3.*stdghost
+            is2nd_oyc[o][row2nd_oYC[o],col_C] = ghost_oyc[o][row2nd_oYC[o],col_C] > 3.*stdghost_oc[o,col_C]
             
     # Mask off second order (profile and image), using box found above on profile
-        if is2nd_oyc.sum() > 100: 
+        is2nd_c = np.any(np.all(is2nd_oyc,axis=0),axis=0)
+        if is2nd_c.sum() > 100: 
             is2nd_c = np.any(np.all(is2nd_oyc,axis=0),axis=0)
             col2nd1 = np.where(is2nd_c)[0][-1]
             col2nd0 = col2nd1 - np.where(~is2nd_c[col2nd1::-1])[0][0] +1
@@ -171,8 +193,8 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
                     - interp1d(lam_m,rpix_om[o],kind='cubic')(lam_c[col_C]))/rbin).astype(int)
                 row2nd_oYC[o] = row2nd_C + boxrange[:,None]
                 for y in np.arange(edgerow_od[o,0],edgerow_od[o,1]+1):
-                    profile_oy[o,y] = np.median(profile_oyc[o,y,okprof_oyc[o,y,:]])
-                dprofile_yc = profile_oyc[o] - profile_oy[o,:,None]
+                    profile_oy[o,y] = np.median(profilesm_oyc[o,y,okprof_oyc[o,y,:]])
+                dprofile_yc = profilesm_oyc[o] - profile_oy[o,:,None]
                 is2nd_oyc[o][row2nd_oYC[o],col_C] = \
                     (dprofile_yc[row2nd_oYC[o],col_C] > 5.*np.sqrt(var_oyc[o][row2nd_oYC[o],col_C]))
                 strength2nd = dprofile_yc[is2nd_oyc[o]].max()
@@ -182,42 +204,54 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
             is2nd_oyc[:,:,0:col2nd0-1] = False
             wav2nd0,wav2nd1 = wav_oyc[0,trow_o[0],[col2nd0,col2nd1]]
             okprof_oyc &= (~is2nd_oyc)
+            okprofsm_oyc &= (~is2nd_oyc)
             isnewbadbin_oyc |= is2nd_oyc
             isbadghost_oyc |= is2nd_oyc
             ghost_oyc *= (~isbadghost_oyc).astype(int)                     
-#            pyfits.PrimaryHDU(isbadghost_oyc.astype('uint8')).writeto('isbadghost_oyc.fits',clobber=True) 
-#            pyfits.PrimaryHDU(ghost_oyc.astype('float32')).writeto('ghost_oyc.fits',clobber=True) 
-
             log.message('2nd order masked,     strength %7.4f, wavel %7.1f - %7.1f (/2)' \
-                        % (strength2nd,wav2nd0,wav2nd1), with_header=False)        
+                        % (strength2nd,wav2nd0,wav2nd1), with_header=False)
+        else: col2nd0 = cols        
 
-    # Remaining ghosts have same position O and E. _Y = row around target
+#        np.savetxt("stdghost_oc.txt",stdghost_oc.T,fmt="%10.5f")
+#        pyfits.PrimaryHDU(isbadghost_oyc.astype('uint8')).writeto('isbadghost_oyc.fits',clobber=True) 
+#        pyfits.PrimaryHDU(ghost_oyc.astype('float32')).writeto('ghost_oyc.fits',clobber=True) 
+
+    # Remaining ghosts have same position O and E. _Y = row around target, both beams
         Rows = 2*np.abs(trow_o[:,None]-edgerow_od).min()+1
         row_oY = np.add.outer(trow_o,np.arange(Rows)-Rows/2)
         ghost_Yc = 0.5*ghost_oyc[np.arange(2)[:,None],row_oY,:].sum(axis=0) 
         isbadghost_Yc = isbadghost_oyc[np.arange(2)[:,None],row_oY,:].any(axis=0)
-        profile_Yc = 0.5*profile_oyc[np.arange(2)[:,None],row_oY,:].sum(axis=0) 
+        stdghost_c = np.std(ghost_Yc,axis=0)
+        profile_Yc = 0.5*profilesm_oyc[np.arange(2)[:,None],row_oY,:].sum(axis=0) 
         okprof_Yc = okprof_oyc[np.arange(2)[:,None],row_oY,:].all(axis=0)               
-        
+                    
     # Search for Littrow ghost as undispersed object off target
-
+    # Convolve with ghost kernal in spectral direction, divide by standard deviation, 
+    #  then add up those > 10 sigma within fwhm box
         isbadlitt_Yc = isbadghost_Yc | \
             (convolve1d(isbadghost_Yc.astype(int),kernelbkg,axis=1,mode='constant',cval=1) != 0)
         litt_Yc = convolve1d(ghost_Yc,kernel,axis=-1,mode='constant',cval=0.)*(~isbadlitt_Yc).astype(int)
+        litt_Yc[:,stdghost_c>0] /= stdghost_c[stdghost_c>0]
+        litt_Yc[litt_Yc < 10.] = 0.
+        for c in range(cols):
+            litt_Yc[:,c] = np.convolve(litt_Yc[:,c],np.ones(boxbins))[boxbins/2:boxbins/2+Rows] 
+        for Y in range(Rows):
+            litt_Yc[Y] = np.convolve(litt_Yc[Y],np.ones(boxbins))[boxbins/2:boxbins/2+cols] 
+        Rowlitt,collitt = np.argwhere(litt_Yc == litt_Yc[:col2nd0].max())[0]
+        littbox_Yc = np.meshgrid(boxrange+Rowlitt,boxrange+collitt)
+
+#        np.savetxt("stdghost_c.txt",stdghost_c.T,fmt="%10.5f")
 #        pyfits.PrimaryHDU(litt_Yc.astype('float32')).writeto('litt_Yc.fits',clobber=True)
 #        pyfits.PrimaryHDU(isbadlitt_Yc.astype('uint8')).writeto('isbadlitt_Yc.fits',clobber=True)
-        islitt_Yc = litt_Yc > 10.*stdghost    
-        Rowlitt,collitt = np.argwhere(litt_Yc == litt_Yc[:col2nd0].max())[0]
 
-        littbox_Yc = np.meshgrid(boxrange+Rowlitt,boxrange+collitt)
-        
+  
     # Mask off Littrow ghost (profile and image)
-        if islitt_Yc[littbox_Yc].sum() > 2:
+        if litt_Yc[Rowlitt,collitt] > 100:
             islitt_oyc = np.zeros((2,rows,cols),dtype=bool)
             for o in (0,1):
                 for y in np.arange(edgerow_od[o,0],edgerow_od[o,1]+1):
-                    profile_oy[o,y] = np.median(profile_oyc[o,y,okprof_oyc[o,y,:]])
-                dprofile_yc = profile_oyc[o] - profile_oy[o,:,None]
+                    profile_oy[o,y] = np.median(profilesm_oyc[o,y,okprof_oyc[o,y,:]])
+                dprofile_yc = profilesm_oyc[o] - profile_oy[o,:,None]
                 littbox_yc = np.meshgrid(boxrange+Rowlitt-Rows/2+trow_o[o],boxrange+collitt)
                 islitt_oyc[o][littbox_yc] =  \
                     dprofile_yc[littbox_yc] > 10.*np.sqrt(var_oyc[o][littbox_yc])
@@ -230,7 +264,8 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
             
             log.message('Littrow ghost masked, strength %7.4f, ypos %5.1f", wavel %7.1f' \
                         % (strengthlitt,(Rowlitt-Rows/2)*(rbin/8.),wavlitt), with_header=False)        
-            
+
+
     # Anything left as spatial profile feature is assumed to be neighbor non-target stellar spectrum
         okprof_Yc = okprof_oyc[np.arange(2)[:,None],row_oY,:].all(axis=0)
         okprof_Y = okprof_Yc.any(axis=1)
@@ -251,9 +286,12 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
         rblk,cblk = rows/rblks,cols/cblks
         bkg_oyc = np.zeros((2,rows,cols))
         for o in (0,1):          
-            bkg_oyc[o] = blksmooth2d(profile_oyc[o],okprof_oyc[o],rblk,cblk,0.5,mode="median")
-        okprof_oyc &= (bkg_oyc > 0.)&(var_oyc > 0)
-        skyline_oyc = (profile_oyc - bkg_oyc)*okprof_oyc
+            bkg_oyc[o] = blksmooth2d(profilesm_oyc[o],okprof_oyc[o],rblk,cblk,0.5,mode="median")
+        okprofsm_oyc &= (bkg_oyc > 0.)&(var_oyc > 0)
+
+    # for outer continuum use profile from image divided by spectrum image smoothed to slit width
+
+        skyline_oyc = (profilesm_oyc - bkg_oyc)*okprof_oyc
         isline_oyc = np.zeros((2,rows,cols),dtype=bool)
         isline_oyc[okprof_oyc] = (skyline_oyc[okprof_oyc] > 3.*np.sqrt(var_oyc[okprof_oyc]))
 #        pyfits.PrimaryHDU(bkg_oyc.astype('float32')).writeto('bkg_oyc_0.fits',clobber=True) 
@@ -262,12 +300,12 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
                    
     # iterate once, using mean outside of skylines      
         for o in (0,1):
-            bkg_oyc[o] = blksmooth2d(profile_oyc[o],(okprof_oyc & ~isline_oyc & ~isbadrow_oy[:,:,None])[o], \
+            bkg_oyc[o] = blksmooth2d(profilesm_oyc[o],(okprof_oyc & ~isline_oyc & ~isbadrow_oy[:,:,None])[o], \
                     rblk,cblk,0.25,mode="mean")
         okprof_oyc &= (bkg_oyc > 0.)&(var_oyc > 0)
         
     # remove continuum, refinding skylines   
-        skyline_oyc = (profile_oyc - bkg_oyc)*okprof_oyc
+        skyline_oyc = (profilesm_oyc - bkg_oyc)*okprof_oyc
         isline_oyc = np.zeros((2,rows,cols),dtype=bool)
         isline_oyc[okprof_oyc] = (skyline_oyc[okprof_oyc] > 3.*np.sqrt(var_oyc[okprof_oyc]))
 
@@ -287,21 +325,30 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
         wavhist_w = (argwav_oyc[isline_oyc][:,None] == np.arange(wavs)).sum(axis=0)
     # find line wavelengths where line bins exceed 50% of background rows in more than one column     
         thresh = wavhist_w.max()/2
-        argwav1_l = np.where((wavhist_w[:-1]<thresh) & (wavhist_w[1:]>thresh))[0] + 1
-        argwav2_l = np.where((wavhist_w[argwav1_l[0]:-1]>thresh) & \
-                    (wavhist_w[argwav1_l[0]+1:]<thresh))[0] + argwav1_l[0]
-        lines = min(argwav1_l.shape[0],argwav2_l.shape[0])
-        if argwav2_l.shape[0] > lines: argwav2_l = np.resize(argwav2_l,lines) 
+        argwav1_l = np.flatnonzero((wavhist_w[:-1] < thresh) & (wavhist_w[1:] > thresh))
+        argwav2_l = np.flatnonzero((wavhist_w[argwav1_l[0]:-1] > thresh) \
+                            & (wavhist_w[argwav1_l[0]+1:] < thresh)) + argwav1_l[0]
+        lines = argwav2_l.shape[0]
+        argwav1_l = argwav1_l[:lines]
         cols_l = np.around((wav_w[argwav2_l]-wav_w[argwav1_l])/dwav).astype(int)
+
+    # delete spikes
         if (cols_l <2).sum():
             argwav1_l = np.delete(argwav1_l,np.where(cols_l<2)[0])
             argwav2_l = np.delete(argwav2_l,np.where(cols_l<2)[0])
             cols_l = np.delete(cols_l,np.where(cols_l<2)[0])
             lines = cols_l.shape[0] 
                                  
-    # make row,col map of line locations, extract spatial line profile, polynomial smoothed               
+    # make row,col map of line locations              
         dwav1_loyc = np.abs(wav_oyc - wav_w[argwav1_l][:,None,None,None])
-        col1_loy = np.argmin(dwav1_loyc,axis=-1)       
+        col1_loy = np.argmin(dwav1_loyc,axis=-1)
+
+    # delete last line if it extends over the edge
+        if col1_loy[-1].max() + cols_l[-1] > cols: lines += -1
+    
+        argwav1_l = argwav1_l[:lines]
+        argwav2_l = argwav2_l[:lines]
+        cols_l = cols_l[:lines]        
         line_oyc = -1*np.ones((2,rows,cols),dtype=int)
         int_loy = np.zeros((lines,2,rows)); intsm_loy = np.zeros_like(int_loy)
         intvar_lo = np.zeros((lines,2))          
@@ -357,12 +404,13 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
                         % tuple(wav_m), with_header=False)
 
         skyflat_orc = np.ones((2,rows,cols)) 
-                            
-        if skylines>0:
+        targetrow_od = np.zeros((2,2))
+
+        if skylines == 0:
+            log.message('\nNo sky lines found', with_header=False)                                                      
+        elif skylines>1:
             wav_s = ((lam_u*flux_u)[:,None]*isid_ul).sum(axis=0)[line_s]/fsky_l[line_s]
 
-            targetrow_od = np.zeros((2,2))
-                          
             log.message('\nSkyflat formed from %3i sky lines %5.1f - %5.1f Ang' \
                         % (skylines,wav_s.min(),wav_s.max()), with_header=False)
 
@@ -395,13 +443,13 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
                 aout_fC = (np.vstack((outrow_f,outrow_f**2,outrow_f*outwav_f,outrow_f**2*outwav_f))).T             
                 skyflat_orc[o] = (np.dot(aout_fC[:,:Cofs],lsqcof_C) + 1.).reshape((rows,cols))
 
-    # compute smoothed psf, new badpixmap, map of background continuum in original geometry                
+    # compute psf from unsmooth profile, new badpixmap, map of background continuum in original geometry                
         isbkgcont_oyc = ~(isnewbadbin_oyc | isline_oyc | isbadrow_oy[:,:,None])
         isnewbadbin_orc = np.zeros_like(isbadbin_orc)
         isbkgcont_orc = np.zeros_like(isbadbin_orc)
         psf_orc = np.zeros_like(profile_orc)      
         isedge_oyc = (np.arange(rows)[:,None] < edgerow_od[:,None,None,0]) | \
-            (np.indices((rows,cols))[0] > edgerow_od[:,None,None,1])        
+            (np.indices((rows,cols))[0] > edgerow_od[:,None,None,1])
         isskycont_oyc = (((np.arange(rows)[:,None] < edgerow_od[:,None,None,0]+rows/16) |  \
             (np.indices((rows,cols))[0] > edgerow_od[:,None,None,1]-rows/16)) & ~isedge_oyc)
         for o in (0,1):                         # yes, it's not quite right to use skyflat_o*r*c                      
@@ -421,6 +469,8 @@ def specpolsignalmap(hdu,logfile=sys.stdout):
         maprow_od = np.vstack((edgerow_od[:,0],targetrow_od[:,0],targetrow_od[:,1],edgerow_od[:,1])).T
         maprow_od += np.array([-2,-2,2,2])
 
+#        pyfits.PrimaryHDU(psf_orc.astype('float32')).writeto('psf_orc.fits',clobber=True) 
+#        pyfits.PrimaryHDU(skyflat_orc.astype('float32')).writeto('skyflat_orc.fits',clobber=True)         
         return psf_orc,skyflat_orc,isnewbadbin_orc,isbkgcont_orc,maprow_od,drow_oc
                         
 #---------------------------------------------------------------------------------------

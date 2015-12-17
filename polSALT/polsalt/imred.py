@@ -66,9 +66,7 @@ def imred(infile_list, prodir, bpmfile=None, gaindb = None, cleanup=True):
 
     for img in infile_list:
         hdu = pyfits.open('p'+os.path.basename(img), 'update')
-        # for backwards compatibility
-        if hdu[0].header.has_key('PROPOSAL'):
-            hdu[0].header.rename_key('PROPOSAL','PROPID')     
+        # for backwards compatibility  
         if not hdu[1].header.has_key('XTALK'):
             hdu[1].header.update('XTALK',1474)
             hdu[2].header.update('XTALK',1474)
@@ -114,6 +112,7 @@ def imred(infile_list, prodir, bpmfile=None, gaindb = None, cleanup=True):
     #    if (int(obsdate) > int(geomline.split(' ')[0].replace('-',''))): break
     #geomfile = "RSSgeom_obsdate.dat"
     #open(geomfile,'w').write(geomline)
+
     geomfile=iraf.osfn("pysalt$data/rss/RSSgeom.dat")
     
     try:
@@ -180,13 +179,12 @@ def masterbadpixel(inhdu, bphdu, sci_ext, bp_ext):
             message = '%s and %s are not the same %s' % (infile,bpfile, 'INSTRUME')
             raise SaltError(message)
         else:
-            master_rc = bphdu[masterext].data.copy()
-            masterrows,mastercols = master_rc.shape
             rows,cols = inhdu[sci_ext].data.shape
-            rbin,cbin = np.array(inhdu[sci_ext].header["CCDSUM"].split(" ")).astype(int)
-            if ((masterrows % rbin)>0)|((mastercols % cbin)>0):
-                message = '%i , %i binning not yet supported' % (cbin,rbin)
-                raise SaltError(message)
+            cbin,rbin = np.array(inhdu[sci_ext].header["CCDSUM"].split(" ")).astype(int)
+            masterrows,mastercols = bphdu[masterext].data.shape
+            master_rc = np.ones((masterrows+(masterrows % rbin),mastercols+(mastercols % cbin)))
+            master_rc[:masterrows,:mastercols] = bphdu[masterext].data
+            masterrows,mastercols=(masterrows+(masterrows % rbin),mastercols+(mastercols % cbin))
             ampsec = inhdu[sci_ext].header["AMPSEC"].strip("[]").split(",")
             r1,r2 = (np.array(ampsec[1].split(":")).astype(int) / rbin) * rbin
             c1,c2 = (np.array(ampsec[0].split(":")).astype(int) / cbin) * cbin

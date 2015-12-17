@@ -90,7 +90,10 @@ def specpolview(infile_list, bincode='', saveoption = ''):
             wok = wok_s[0] & wok_s[1] & wok_s[2]
             stokesp_w[wok] = np.sqrt(stokes_sw[1,wok]**2 + stokes_sw[2,wok]**2)     # unnormalized linear polarization
             stokest_w[wok] = (0.5*np.arctan2(stokes_sw[2,wok],stokes_sw[1,wok]))    # PA in radians
-            stokest_w -= (int((stokest_w[wok].mean() + np.pi)/np.pi) -1)*np.pi      # 0 < mean < pi
+            stokestmean = 0.5*np.arctan2(stokes_sw[2,wok].mean(),stokes_sw[1,wok].mean())
+            pafold = np.pi*stokestmean/abs(stokestmean)
+            stokest_w[np.abs(stokest_w-stokestmean)>np.pi/2.] += pafold
+            stokest_w -= (int((stokestmean + np.pi)/np.pi) -1)*np.pi      # 0 < mean < pi
         # variance matrix eigenvalues, ellipse orientation
             varpe_dw[:,wok] = 0.5*(var_sw[1,wok]+var_sw[2,wok]                          \
                     + np.array([1,-1])[:,None]*np.sqrt((var_sw[1,wok]-var_sw[2,wok])**2 + 4*var_sw[-1,wok]**2))
@@ -144,7 +147,8 @@ def specpolview(infile_list, bincode='', saveoption = ''):
                 varpe_db = np.zeros((2,bins));  varpt_b = np.zeros((bins))
                 stokesp_b[bok] = np.sqrt(stokes_sb[1,bok]**2 + stokes_sb[2,bok]**2)     # unnormalized linear polarization
                 stokest_b[bok] = (0.5*np.arctan2(stokes_sb[2,bok],stokes_sb[1,bok]))    # PA in radians
-                stokest_b -= (int((stokest_b[bok].mean() + np.pi)/np.pi) -1)*np.pi      # 0 < mean < pi
+                stokest_b[bok] = ((stokest_b[bok]+np.pi/2.+np.median(stokest_b[bok])) % np.pi) \
+                                - np.median(stokest_b[bok])                             # get rid up 180 wraps
             # variance matrix eigenvalues, ellipse orientation
                 varpe_db[:,bok] = 0.5*(var_sb[1,bok]+var_sb[2,bok]                          \
                     + np.array([1,-1])[:,None]*np.sqrt((var_sb[1,bok]-var_sb[2,bok])**2 + 4*var_sb[-1,bok]**2))
@@ -193,7 +197,8 @@ def specpolview(infile_list, bincode='', saveoption = ''):
                 " Err  ".join(stokes_s[1:plots])+' Err '           
         np.savetxt(textfile,np.vstack((wav_v,stokes_sv[1:],errstokes_sv[1:])).T, fmt=fmt, header=hdr) 
 
-    plot_s[0].set_ylim(bottom=0)
+    plot_s[0].set_ylim(bottom=0)                            # intensity plot baseline 0
+    if plots >2: plot_s[1].set_ylim(bottom=0)               # linear polarization % plot baseline 0
     if obss>1: plot_s[0].legend(fontsize='x-small',loc='lower center')
     else: plot_s[0].set_title(name+"   "+obsdate) 
     if saveplot:

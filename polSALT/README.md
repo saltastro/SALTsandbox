@@ -13,7 +13,7 @@ Instructions
 
 2. Copy the script 'reducepoldata.py' to the directory that has the
    data that you want to reduce.   Edit this file to point to the 
-   polsalt directory, and the proposal code.
+   polsalt directory.
 
 3. The directory where you will run the data should have the format
    such that in the top level directory there should be the
@@ -26,11 +26,11 @@ Instructions
 
    python reducepoldata.py 20061030
 
-   Replace the obsdate with the appropriate observations date
+   Replace the obsdate with the appropriate observation date
 
 5. Reducepoldata should step through all the tasks needed to produce
-   wavelength calibrated stokes spectra.   There will be one interactive
-   step to identify arc lines.
+   wavelength calibrated stokes spectra.   There will be two interactive
+   steps for each arc (O and E beams) to identify arc lines.
 
 6. Once complete, inspect the final product in the sci directory
    that was created.  There should be "raw stokes" files 
@@ -47,12 +47,12 @@ Instructions
 7. To examine stokes spectra, use specpolview.py. You will either need the 
    full path to specpolview.py or copy it into the directory. Examples:  
 
-   Overplot the intensity and normalized raw stokes I, S/I for 
-   this object/configuration:
-   python specpolview.py QTH1-QTH2_c0_h*.fits
+   To overplot the intensity and normalized raw stokes I, S/I for 
+   objectname, configuration c0:
+   python specpolview.py (objectname)_c0_h*.fits
 
-   Plot I, P/I, PA (deg) for this object/configuration:
-   python specpolview.py QTH1-QTH2_c0_stokes.fits
+   To plot I, P/I, PA (deg) for this object/configuration:
+   python specpolview.py (objectname)_c0_stokes.fits
 
    Polarization spectra may be binned by wavelength and to constant error, 
    and the plot and/or an ascii table of what is in the plot may be saved

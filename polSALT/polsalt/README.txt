@@ -5,8 +5,8 @@ Reduce RSS spectropolarimetric data through image, wavecal, extract, and stokes
     evaluation steps.
 
 Copy the script 'reducepoldata.py' to the directory that has the data that you want to 
-reduce. Edit this file to point to the polsalt directory, and the proposal code. 
-Comment out steps you don't need (eg, have already performed).
+reduce. Edit this file ("reddir") to point to the polsalt directory. Comment out steps 
+you don't need (eg, have already performed).
 
 The directory where you will run the data should have the format such that in the top 
 level directory there should be the obsdate (e.g. 20061030) and then the raw directory 
@@ -33,12 +33,11 @@ mosaic. Fixed errors in mosaicing bpm and variance.
 cleanup. (same as zsalt, leaves m*.fits file) 
 
 Basic polarimetry steps below are logged in 'specpol'+obsdate+'.log'. Non-polarimetric 
-images (based on beamsplitter out) are skipped.  For now, the assumption is made that all
-images are of the same object/configuration (where "configuration" is defined by 
-grating, grating angle, articulation, and waveplate pattern). This will be fixed in the 
-future. 
+images (based on beamsplitter out) are skipped.  You may include images from several
+observations (objects, configurations).  The software will sort the data into the
+appropriate groups and associate the appropriate calibtrations with them.
  
-specpolmap. Split beams, wavelength calibrate.
+specpolwavmap. Split beams, wavelength calibrate.
 ----------------------------------------------
 The arc image is split into O and E arcs, and the beamsplitter chromaticism is 
 removed to straighten the dispersion temporarily. Each is fed to specidentify in 
@@ -49,14 +48,15 @@ third fits dimension. The wavelength map is added to each as a "WAV" extension. 
 "w" is put on the image name. There are two stokes layers, O and E, each with SCI, VAR, 
 BPM, and WAV extensions. 
 
-specpolextract. Define target extraction aperture, and extract spectra.
+specpolextract. Define an artifact-avoidance mask, target and background apertures, and 
+extract spectra.
 -----------------------------------------------------------------------
 First, all non-arc images are combined (O and E separately) to map out the target and 
 background:  The target spectrum is traced by finding the cross-dispersion maximum and 
 evaluating the beamsplitter curvature.  For lamp spectra the extraction aperture extends 
 halfway to the next slit or to the edge of the FOV (whichever comes first). For sky
 spectra a number of artifacts are located and masked: second order light, Littrow ghost,
-autocollimator laser light.  For sky spectra emission lines in the background are located
+autocollimator laser light.  For sky, spectra emission lines in the background are located
 and sky lines are used to make a skyflat, while non-sky emission lines are partially 
 masked to light near the target.  For sky spectra the PSF along the slit is evaluated
 by smoothing the ratio of the background to the target spectrum maximum (after removal 
@@ -108,8 +108,8 @@ ________________________________________________________________________________
 specpolview fitslist binoption saveoption.  Plot and text analysis of stokes files.
 ===================================================================================
     fitslist: one or more raw or final stokes files (but not both).
-    binoption: either "unbin", nn"A" (use bins of width nn Angstroms), or nn"%" (bin 
-        to nn %S or %P error, for raw or linear polarization spectra)
+    binoption: either omitted or "unbin", nn"A" (use bins of width nn Angstroms), or 
+        nn"%" (bin to nn %S or %P error, for raw or linear polarization spectra)
     saveoption: either "plot" (save plot as pdf), "text" (save text table of what is in 
         plot), or both (eg "plottext")
 
