@@ -1,0 +1,39 @@
+/d/pfis/khn/20141212/sci
+-khn-oderbolz-52-> thrufoc_rsscartesian.py m*07[7-9].fits m*08[0-6].fits
+2016-08-04 15:10:09.284639 
+
+Mask:       P000000N99    tip,tilt:   -7.4  -21.1   arcmin
+Filter:     PI06645
+Col Temp:      11.8
+Cam Temp:       7.8
+
+Distortion Fit for focus  549.0
+    pix grid0x   grid0y   dist0x   dist0y      A   rot(deg) gridsep(arcsec) 
+ start  -56.00    12.00    44.10    72.80   0.0143   0.0000    22.00
+ fit    -55.79     8.60    -0.91   -18.04   0.0121   0.0065    22.18
+
+ image focus  spots
+   77     58   335
+   78    143   336
+   79    250   332
+   80    351   336
+   81    450   336
+   82    549   337
+   83    648   337
+   84    747   334
+   85    847   338
+   86    946   337
+
+Best focal plane          arcmin
+         focus(micr)    tip    tilt   fwhm(arcsec) spots
+ longslit    645.7    -1.13   -5.24      0.46       40
+ imaging     646.7    -2.31  -10.88      0.46      331
+ maskrim     617.4    -4.33  -11.60      0.54       55
+
+ Curvature:     60.6 
+
+ Suggested adjustment turns
+ tip:   top :   0.4
+     bottom :  -0.4
+ tilt: left :  -1.4
+
