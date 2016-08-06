@@ -1,6 +1,6 @@
 thrufoc_rsscartesian.py fitslist (fwhmfile= debug=)
 
-Thru-focus analysis for a cartesian mask (eg N99 or N02).
+Thru-focus analysis for a cartesian mask (eg N99 or N01).
 
     fitslist: unix commandline list of fits files 
     optional: fwhmfile (string). Saves fwhmfile_fwhm.fits cube of fwhm vs row, col,focus
