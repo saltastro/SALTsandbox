@@ -1,6 +1,42 @@
+thrufoc_rsscartesian.py fitslist (fwhmfile= debug=)
+
+Thru-focus analysis for a cartesian mask (eg N99 or N01).
+
+    fitslist: unix commandline list of fits files 
+    optional: fwhmfile (string). Saves fwhmfile_fwhm.fits cube of fwhm vs row, col,focus
+    optional: debug=True.  Saves sextractor file for center of focus run.    
+
+You will need to edit hardwired directory path "datadir" at line 23 of 
+thrufoc_rsscartesian.py. Then put qred.sex there.
+
+The sample 20141212_6645_thrufoc_rsscartesian.txt shows you what I 
+get when I run it on the 20141212 6645 filter thrufocus data taken with the "N99" 
+cartesian mask. On my machine, this takes about 30 seconds. 
+
+The slitmask is identified, and the known tip and tilt of that mask is given, which is 
+removed from the detector plane tip, tilt to be calculated. The filter and temperature 
+data are for information only, and are not used by the program. The program first looks at 
+the middle image in the run (presumably near focus) using SExtractor, identifies the 
+spots with a cartesian grid using a first-guess distortion model ("start"), and computes a 
+best-fit distortion model ("fit"). It then runs SExtractor on all the images to tabulate 
+image properties of the spots as a function of position and focus. "spots" is the total 
+number of spots found in each image. A focus curve is computed for each spot.  A best 
+focus position for each focus curve is computed by minimizing the rms difference to the 
+median focus curve as a function of focal shift. Finally, it fits the best focus as 
+a function of position to a polynomial surface to obtain the mean central focus, tip, and 
+tilt, and the mean fwhm for three cases:  First, for longslit applications it fits a plane 
+to spots along the x and y axes.  Second, for imaging it fits a plane to all spots. Third 
+("maskrim"), it fits all spots to a second-order polynomial surface to obtain a mask 
+curvature and the tilt and tip of the focal plane at the edge of the field of view (ie, 
+the orientation of the mask frame).
+
+At the very bottom, advice is given on the screw adjustments for the detector which 
+would zero out the tilt and tip errors.
+ 
+--------------------------------------------------------------------------------------
 thrufoc_rssimage.py fitslist (filesave)
 
-Thru-focus analysis for any imaging mask
+Thru-focus analysis for any imaging mask (or no mask)
 
     fitslist: unix commandline list of fits files 
     option : if optional last argument = "filesave", text files are saved: 

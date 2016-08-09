@@ -1,9 +1,10 @@
 #! /usr/bin/env python
 
-# Compute RSS imaging flatfield for a specific image
+# Compute RSS image quality data cube and focal plane for cartesian thrufocus run
 
 import os, sys, time
 import numpy as np
+from datetime import datetime
 from scipy.optimize import fmin
 from scipy.ndimage import interpolation as nd
 from scipy import interpolate as ip
@@ -22,7 +23,7 @@ STDOUT = sys.stdout
 datadir = "/d/carol/Synched/software/SALT/pipeline/"    
 
 # ---------------------------------------------------------------------------------
-def sextract(fits,option=""):
+def sextract(fits,debug=False):
 # run sextractor to find objects
     global hdulist_image, shape_d
     hdulist_image = pyfits.open(fits)
@@ -37,13 +38,15 @@ def sextract(fits,option=""):
             % (fits, "out.txt", sigma, r_ap, sat)
     os.system(cmd+" &> /dev/null")
     sex_js = np.loadtxt("out.txt").transpose()
-    os.remove("out.txt")
+    if not debug: os.remove("out.txt")
     return sex_js
 
 # ---------------------------------------------------------------------------------
-def thrufoc_rssimage(name,fitslist,option=""):
+def thrufoc_rsscartesian(fitslist,fwhmfile="", debug=False):
     global sex_js, rd, B, pixarcsec, gridsize, niter
     global focus_f, rc0_dgg, usespots_gg, fwhminterp_g                                            # for cube analysis
+
+    print str(datetime.now()),'\n'
 
     focposns = len(fitslist)
 
@@ -53,10 +56,34 @@ def thrufoc_rssimage(name,fitslist,option=""):
     turnfac_d = [8.0,6.7]                                                        # arcmin/turn for tip/tilt adustment
     rcoff_df = np.zeros((2,focposns))    
     catposn = focposns/2
-    rcbin_d = np.array(pyfits.getheader(fitslist[catposn],0)["CCDSUM"].split(" ")).astype(int)
-    maskid =  (pyfits.getheader(fitslist[catposn],0)["MASKID"]).strip() 
-    focuscat = pyfits.getheader(fitslist[catposn],0)["FO-POS-V"] 
-    sex_js = sextract(fitslist[catposn],option)
+    hdr = pyfits.getheader(fitslist[catposn],0)
+    cbin,rbin = map(int,(hdr["CCDSUM"].split(" ")))
+    maskid =  (hdr["MASKID"]).strip() 
+    filter =  (hdr["FILTER"]).strip()
+    if "COLTEM" in hdr:                                                         # allow for annoying SALT fits version change
+        coltem = float(hdr["COLTEM"]) 
+        camtem = float(hdr["CAMTEM"])
+    else:
+        coltem = float(hdr["COLTEMP"]) 
+        camtem = float(hdr["CAMTEMP"])     
+    focuscat = hdr["FO-POS-V"]
+
+    if      maskid == "P000000N99":  
+                rc0_d = (-56.,+12.)
+                masktip,masktilt = (-7.4,-21.1)
+    elif    maskid == "P000000N01":  
+                rc0_d = (-22.,+18.)
+                masktip,masktilt = (0.,0.)
+    else:
+        print maskid, " is not a cartesian mask"
+        exit()
+
+    print "Mask:      ", maskid, ("   tip,tilt: %6.1f %6.1f " % (masktip,masktilt)), " arcmin"
+    print "Filter:    ", filter
+    print "Col Temp:   %7.1f" % (coltem)
+    print "Cam Temp:   %7.1f" % (camtem)
+ 
+    sex_js = sextract(fitslist[catposn],debug)
     sexcols = sex_js.shape[0]
 
 #   get first guess positions from distortion model
@@ -69,11 +96,7 @@ def thrufoc_rssimage(name,fitslist,option=""):
     Fsclpoly=imgdist[4: ,0]
     pixarcsec = pixel/Fsclpoly[5]
 
-    if      maskid == "P000000N99":  rc0_d = (-56.,+12.)
-    elif    maskid == "P000000N01":  rc0_d = (-22.,+18.)
-    else:
-        print maskid, " is not a thrufocus mask"
-        exit()
+
 
 #   optimize model
     x0 = np.zeros((7))    
@@ -81,7 +104,7 @@ def thrufoc_rssimage(name,fitslist,option=""):
     x0[2:4] = rcd_d 
     x0[4:7] = A,0.,gridsep
 
-    print "Distortion Fit for focus ", focuscat
+    print "\nDistortion Fit for focus ", focuscat
     print "    pix grid0x   grid0y   dist0x   dist0y      A   rot(deg) gridsep(arcsec) " 
     print (" start"+4*"%8.2f "+2*"%8.4f "+"%8.2f") % tuple(x0) 
 
@@ -126,8 +149,8 @@ def thrufoc_rssimage(name,fitslist,option=""):
     x0 = np.array([focus_f[np.argmin(sexdata_jfgg[10,:,gridsize/2,gridsize/2])],0.,0.])
     args_gg = np.indices((gridsize,gridsize))
 
-    print "\nBest focal plane          arcmin        turns in adj "
-    print   "         focus(micr)    tip    tilt      top   right  fwhm(arcsec) spots"
+    print "\nBest focal plane          arcmin"
+    print   "         focus(micr)    tip    tilt   fwhm(arcsec) spots"
 
     niter = 0
     usespots_gg = (foundcount_gg == focposns) & ((args_gg[0] == gridsize/2) | (args_gg[1] == gridsize/2))
@@ -140,10 +163,12 @@ def thrufoc_rssimage(name,fitslist,option=""):
     sys.stdout = Blackhole()                                                       # suppress output of the fmin function
     xls = fmin(fwhmnet, x0, xtol=fittol)
     rms = pixarcsec*fwhmnet(xls)
-    arcmin_d = 60.*np.degrees(xls[1:]/pixel)
+    tip,tilt = 60.*np.degrees(xls[1:]/(pixel*rbin))
     sys.stdout = STDOUT  
-    print " longslit %8.1f " % xls[0], 2*"%7.2f " % tuple(arcmin_d), \
-            2*"%7.2f " % tuple(arcmin_d/turnfac_d), "%8.2f %8i" % (rms, usespots_gg.sum())
+    print " longslit %8.1f " % xls[0], 2*"%7.2f " % (tip,tilt), "%8.2f %8i" % (rms, usespots_gg.sum())
+
+    fwhmcenter_f = sexdata_jfgg[10][:,gridsize/2,gridsize/2]
+    foccenter = ip.interp1d(focus_f,fwhmcenter_f,kind ='cubic')(np.arange(focus_f[0],focus_f[-1])).argmin() + focus_f[0]
 
     niter = 0
     usespots_gg = (foundcount_gg == focposns)
@@ -156,10 +181,9 @@ def thrufoc_rssimage(name,fitslist,option=""):
     sys.stdout = Blackhole()                                                       
     ximg = fmin(fwhmnet, x0, xtol=fittol)
     rms = pixarcsec*fwhmnet(ximg)
-    arcmin_d = 60.*np.degrees(ximg[1:]/pixel)
+    tip,tilt = 60.*np.degrees(ximg[1:]/(pixel*rbin))
     sys.stdout = STDOUT                                                            # Restore normal output     
-    print " imaging  %8.1f " % ximg[0], 2*"%7.2f " % tuple(arcmin_d), \
-            2*"%7.2f " % tuple(arcmin_d/turnfac_d), "%8.2f %8i" % (rms, usespots_gg.sum())
+    print " imaging  %8.1f " % ximg[0], 2*"%7.2f " % (tip,tilt), "%8.2f %8i" % (rms, usespots_gg.sum())
 
     niter = 0
     usespots_gg = (foundcount_gg == focposns) & (np.sqrt((args_gg[0] - gridsize/2)**2 + (args_gg[1] - gridsize/2)**2) >= gridsize/2)
@@ -172,21 +196,28 @@ def thrufoc_rssimage(name,fitslist,option=""):
     sys.stdout = Blackhole()                                                       # suppress output of the fmin function
     xrim = fmin(fwhmnet, x0, xtol=fittol)
     rms = pixarcsec*fwhmnet(xrim)
-    arcmin_d = 60.*np.degrees(xrim[1:]/pixel)
+    tip,tilt = 60.*np.degrees(xrim[1:]/(pixel*rbin))                                      # in arcmin
     sys.stdout = STDOUT  
-    print " maskrim  %8.1f " % xrim[0], 2*"%7.2f " % tuple(arcmin_d), \
-            2*"%7.2f " % tuple(arcmin_d/turnfac_d), "%8.2f %8i" % (rms, usespots_gg.sum())
+    print " maskrim  %8.1f " % xrim[0], 2*"%7.2f " % (tip,tilt), "%8.2f %8i" % (rms, usespots_gg.sum())
+
+    print "\n Curvature: %8.1f " % (foccenter-xrim[0])                               # in microns
+
+    print "\n Suggested adjustment turns"
+    print " tip:   top :", "%5.1f" % ((tip-masktip)/turnfac_d[0])
+    print "     bottom :", "%5.1f" % (-(tip-masktip)/turnfac_d[0])
+    print " tilt: left :", "%5.1f" % (-(tilt-masktilt)/turnfac_d[1])
 
 #   write out fits cubes for selected data
-    colout_i = (8,9,10)
-    outfile_i = ("theta","ellip","fwhm")
+    if fwhmfile:
+        colout_i = (10,)
+        outfile_i = ("fwhm",)
 
-    print "\n Saving ",outfile_i, " data cubes"
+        print "\n Saving ",outfile_i, " data cube"
 
-    for i in range(len(colout_i)):
-        outfile = name+"_"+outfile_i[i]+".fits"
-        hdulist_image["SCI"].data = sexdata_jfgg[colout_i[i]]
-        hdulist_image.writeto(outfile, clobber = "True")                        
+        for i in range(len(colout_i)):
+            outfile = name+"_"+outfile_i[i]+".fits"
+            hdulist_image["SCI"].data = sexdata_jfgg[colout_i[i]]
+            hdulist_image.writeto(fwhmfile+"_fwhm", clobber = "True")                        
     return
 
 # ---------------------------------------------------------------------------------
@@ -238,11 +269,7 @@ def fwhmnet(x):
 
 # ---------------------------------------------------------------------------------
 if __name__=='__main__':
+    infilelist=[x for x in sys.argv[1:] if x.count('.fits')]
+    kwargs = dict(x.split('=', 1) for x in sys.argv[1:] if x.count('.fits')==0)        
+    thrufoc_rsscartesian(infilelist,**kwargs)
 
-    name=sys.argv[1]
-    fitslist=sys.argv[2:]
-    option = ""
-    if (fitslist[-1] == "debug"):
-        option = fitslist.pop()
-
-    thrufoc_rssimage(name,fitslist,option)
