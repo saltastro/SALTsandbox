@@ -1,0 +1,31 @@
+-khn-oderbolz-52-> thrufoc_rsslongslit.py m*.fits filesave
+2016-08-12 13:25:16.153572 
+
+file prefix: 20111113_longslit
+Mask:    PL0060N001   slitwidth:  0.6 4.8  arcsec, bins
+Lamp:    QTH1
+
+ image  focus  rows line width(arcsec)
+   33      93  3829    1.36 
+   34     185  3829    1.19 
+   35     289  3828    0.97 
+   36     390  3828    0.85 
+   37     488  3828    0.82 
+   38     587  3828    0.84 
+   39     685  3828    0.93 
+   40     781  3828    1.09 
+   41     884  3828    1.29 
+   42     983  3828    1.47 
+   43    1085  3828    1.67 
+   44    1182  3826    1.85 
+
+ best image:  37
+
+ focus    rot     tip  tip curvature
+ (micr) (arcmin) (arcmin) (micr)
+   507   -5.31   -1.53     -42
+ +/-      0.03    0.09
+
+ Suggested adjustment turns
+ tip:   top :  -0.2
+     bottom :   0.2
