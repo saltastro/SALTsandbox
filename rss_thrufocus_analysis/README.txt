@@ -1,3 +1,35 @@
+Descriptions for:
+thrufoc_rsslongslit.py: Imaging thrufocus of longslit
+thrufoc_rsscartesian.py: Imaging thrufocus of cartesian mask (eg N99 or N01)
+thrufoc_rssimage.py: Imaging thrufocus of any imaging mask (or no mask)
+thrufoc_rssspec.py: Longslit spectral thrufocus
+--------------------------------------------------------------------------------------
+
+thrufoc_rsslongslit.py fitslist (filesave)
+
+Imaging thru-focus analysis of longslit 
+
+    fitslist: unix commandline list of fits files
+    option : if optional last argument = "filesave", a text file "(prefix)_colfocus.txt"
+      is saved containing a "good row" flag, the column position, and the best focus of 
+      the slit as a function of row.  The file name prefix is requested. 
+
+The sample 20111113_longslit_thrufoc.txt shows you what I get when I run it on the 0.6 
+arcsec longslit thru-focus data taken on 20111113 with the QTH lamp. On my machine, this 
+takes 5-10 secs. The program looks at the center image in the focus run to find the slit. 
+Then it looks at each focus image and derives the slit width as a function of row, 
+printing out the mean width for each line, so you can see the rough best-focus. The slit 
+now has a focus curve as a function of row, which is block-averaged and spline-
+interpolated into a smooth curve. The best focus, and the tip and tip curvature of the 
+focal plane is computed from this. For the image closest to best focus, the column 
+position of the slit as a function of row is fit with a line to obtain the rotation of the 
+slit relative to the vertical.  The best focus, rotation, tip and tip curvature of the 
+slit (with errors) is then printed out. 
+
+At the very bottom, advice is given on the screw adjustments for the detector which 
+would zero out the tip error.
+--------------------------------------------------------------------------------------
+
 thrufoc_rsscartesian.py fitslist (fwhmfile= debug=)
 
 Thru-focus analysis for a cartesian mask (eg N99 or N01).
@@ -95,15 +127,14 @@ lines in each of the six ccd amplifiers, derives a wavelength for each using the
 spectrograph model (good enough to be within a few Angstroms), and predicts the best 
 focus for that line using the grating, wavelength, and temperature, and the same focus 
 model used on PCON. Then it looks at each focus image and derives the line width as a 
-function of column, printing out the mean width for each line, so you can see the rough 
-best-focus. Each line now has a focus curve as a function of column, which is 
-block-averaged and spline-interpolated into a smooth curve. The best focus, tip and tip 
-curvature of the focal curve of each line is computed from this, and, comparing those, 
-the tilt and tilt curvature. The tilt is relative to the *expected* tilt derived from 
-the spectrograph model, so all grating configurations should nominally give the same 
-tilt. The exception to this is the 2300 l/mm grating, which has appreciable VPH-induced 
-focal power, casing its spectral tilt to deviate from the other gratings by about 4 
-arcmin. 
+function of row, printing out the mean width for each line, so you can see the rough 
+best-focus. Each line now has a focus curve as a function of row, which is block-averaged 
+and spline-interpolated into a smooth curve. The best focus, tip and tip curvature of the 
+focal curve of each line is computed from this, and, comparing those, the tilt and tilt 
+curvature. The tilt is relative to the *expected* tilt derived from the spectrograph 
+model, so all grating configurations should nominally give the same tilt. The exception to 
+this is the 2300 l/mm grating, which has appreciable VPH-induced focal power, casing its 
+spectral tilt to deviate from the other gratings by about 4 arcmin. 
 
 At the very bottom, advice is given on the screw adjustments for the detector which 
 would zero out the tilt and tip errors.
