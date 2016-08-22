@@ -3,6 +3,7 @@ thrufoc_rsslongslit.py: Imaging thrufocus of longslit
 thrufoc_rsscartesian.py: Imaging thrufocus of cartesian mask (eg N99 or N01)
 thrufoc_rssimage.py: Imaging thrufocus of any imaging mask (or no mask)
 thrufoc_rssspec.py: Longslit spectral thrufocus
+flexure_rss.py: Imaging flexure run
 --------------------------------------------------------------------------------------
 
 thrufoc_rsslongslit.py fitslist (filesave)
@@ -138,3 +139,27 @@ spectral tilt to deviate from the other gratings by about 4 arcmin.
 
 At the very bottom, advice is given on the screw adjustments for the detector which 
 would zero out the tilt and tip errors.
+
+--------------------------------------------------------------------------------------
+flexure_rss.py fitslist (filesave)
+
+Imaging flexure analysis 
+
+    fitslist: unix commandline list of fits files
+    option : if optional last argument = "filesave", text files "(prefix)_flex_(fpos).txt"
+      and "(prefix)_sextr_(fpos).txt" are saved for each flexure image (0,...,fpos).  The 
+      "flex" files containing a "good row" flag, and the row and column of each object 
+      relative to the rho=0 image (in pixels).  Thew sextr files contain the detailed 
+      SeXtract output for each image. The file name prefix is requested. 
+
+The sample 20160725_imflex.txt shows you what I get when I run it on the cartesian mask 
+(N99) imaging flexure data taken on 20160725 with the QTH lamp. On my machine, this takes 
+just over a minute.  The program looks at the image with rho closest to 0 and locates the 
+mask spots (attempting to cull out flaws and cosmic rays), and uses this as a baseline.  
+Then it proceeds out from rho = 0, finding where the spots go, while limiting motion to 2 
+arcsec to avoid spoilers. For each image it determines the mean shift in row and column 
+of the whole mask image, and the rotation of the mask image, using the row and column 
+motion separately to estimate changing distortion.  Using these 4 parameters, it 
+determines the remaining residual rms in bins, which assesses the remaining distortion 
+change.  Finally, it generates a pdf graphic of the four parameters, saving them in the 
+.pdf files. 

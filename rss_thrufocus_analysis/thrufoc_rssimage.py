@@ -21,12 +21,14 @@ def sextract(fits,binmask="",deblend=.02):
     hdulist_image = pyfits.open(fits)
     cbin,rbin = map(int,(hdulist_image[0].header["CCDSUM"].split(" ")))
     maskid = hdulist_image[0].header["MASKID"]
+    isspec = hdulist_image[0].header["GR-STATE"][1] == "4"
     image_rc = np.copy(hdulist_image["SCI"].data)
     rows,cols = image_rc.shape
     sigma = 6.                    
     pix_scale=0.125 
     sat=0.99*image_rc.max()
-    rfovpix = 240./pix_scale
+    if isspec: rfovpix = 4000.              # fov larger than detector
+    else: rfovpix = 250./pix_scale
 
 # if no binmask specified, mask out gaps and area outside fov.  Coordinates are bins relative to ccd center, assumed to be center of image
     if binmask == "":
