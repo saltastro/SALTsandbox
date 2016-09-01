@@ -34,11 +34,28 @@ def sextract(fits,debug=False):
     pix_scale=0.125
     r_ap=2.0/(pix_scale*rcbin_d.min())         
     sat=0.99*image_rc.max()
-    cmd= ('sex %s -c '+datadir+'qred.sex -CATALOG_NAME %s -DETECT_THRESH %f -PHOT_APERTURES %f -SATUR_LEVEL %f') \
-            % (fits, "out.txt", sigma, r_ap, sat)
-    os.system(cmd+" &> /dev/null")
-    sex_js = np.loadtxt("out.txt").transpose()
-    if not debug: os.remove("out.txt")
+    sexparams = ["X_IMAGE","Y_IMAGE","MAG_APER(1)","MAGERR_APER(1)","FLUX_ISO","FLUXERR_ISO", \
+            "THRESHOLD","FLUX_MAX","THETA_IMAGE","ELLIPTICITY","FWHM_IMAGE","FLAGS","CLASS_STAR"]
+    np.savetxt("qred_thrufoc.param",sexparams,fmt="%s")
+    cmd= ('sex %s -c '+datadir+'qred.sex -PARAMETERS_NAME %s -CATALOG_NAME %s -DETECT_THRESH %f -PHOT_APERTURES %f -SATUR_LEVEL %f') \
+            % (fits, "qred_thrufoc.param", "out.txt", sigma, r_ap, sat)
+
+    if debug:
+        os.system(cmd+" &> "+fits.replace(".fits","_debug.txt"))
+        if (not os.path.exists("out.txt")):
+            print "call to SeXtractor failed"
+            exit()         
+        sex_js = np.loadtxt("out.txt").transpose()
+        os.rename("out.txt",fits.replace(".fits","_sxtr.txt"))
+
+    else:
+        os.system(cmd+" &> /dev/null")
+        if (not os.path.exists("out.txt")):
+            print "call to SeXtractor failed"
+            exit()   
+        sex_js = np.loadtxt("out.txt").transpose()
+        os.remove("out.txt")
+        os.remove("qred_thrufoc.param")
     return sex_js
 
 # ---------------------------------------------------------------------------------
@@ -96,8 +113,6 @@ def thrufoc_rsscartesian(fitslist,fwhmfile="", debug=False):
     Fsclpoly=imgdist[4: ,0]
     pixarcsec = pixel/Fsclpoly[5]
 
-
-
 #   optimize model
     x0 = np.zeros((7))    
     x0[0:2] = rc0_d 
@@ -127,7 +142,7 @@ def thrufoc_rsscartesian(fitslist,fwhmfile="", debug=False):
 #   using fitted distortion model, find grid spots in focus series, and store sextractor output
     print "\n image focus  spots"
     for fpos in range(focposns):   
-        sex_js = sextract(fitslist[fpos])
+        sex_js = sextract(fitslist[fpos],debug)
         image_f[fpos] = int(fitslist[fpos].split(".")[0][-4:])
         rms = poserr(xopt)
         rcoff_d = ((sex_js[(1,0),s_gg[gridsize/2,gridsize/2]] - rc_dgg[:,gridsize/2,gridsize/2]))    # center up the center spot first
@@ -215,9 +230,9 @@ def thrufoc_rsscartesian(fitslist,fwhmfile="", debug=False):
         print "\n Saving ",outfile_i, " data cube"
 
         for i in range(len(colout_i)):
-            outfile = name+"_"+outfile_i[i]+".fits"
+            outfile = fwhmfile+"_"+outfile_i[i]+".fits"
             hdulist_image["SCI"].data = sexdata_jfgg[colout_i[i]]
-            hdulist_image.writeto(fwhmfile+"_fwhm", clobber = "True")                        
+            hdulist_image.writeto(outfile, clobber = "True")                        
     return
 
 # ---------------------------------------------------------------------------------
