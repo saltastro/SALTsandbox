@@ -2,7 +2,7 @@
 
 # Compute RSS focal surface for six lines across spectrum in a spectral thrufocus
 
-import os, sys, time
+import os, sys, glob, time
 import numpy as np
 from scipy.optimize import fmin
 from scipy.ndimage import interpolation as nd
@@ -42,23 +42,41 @@ def blksmooth1d(ar,blk,mask=[]):
     return arsmooth
 
 # ---------------------------------------------------------------------------------
-def rsslam(grating, grang, artic, dpix_c):
-#   compute on-axis wavelengths for array of columns, using full spectrograph model
-#   grating: grating name
-#   grang: grating angle (deg)
-#   artic: articulation angle (deg)
-#   dpix_c: array of column coordinates, in unbinned pixels relative to center
+def rsslam(grating, grang, artic, dpix_c, dateobs, dalpha=0, gamma=0):
+    """ compute wavelengths for array of columns, using full spectrograph model
 
-    spec=np.loadtxt(datadir+"/spectrograph/spec.txt",usecols=(1,))
+    Parameters
+    ----------
+    grating: string
+        grating name
+    grang: float
+        grating angle (deg)
+    artic: float
+        articulation angle (deg)
+    dpix_c: float ndarray 
+        column coordinates, in unbinned pixels relative to center
+    dateobs: string
+        yymmdd of observation
+    dalpha: float
+        angle in degrees off axis in dispersion direction (optional)
+    gamma: float
+        out-of-plane angle (deg) (optional)
+
+    Returns: wavelength ndarray (Ang)
+
+    """
+    specfile = datedfile(datadir+"spectrograph/spec_yyyymmdd.txt",dateobs)
+    spec=np.loadtxt(specfile,usecols=(1,))
     Grat0,Home0,ArtErr,T2Con,T3Con=spec[0:5]
     FCampoly=spec[5:11]
     grname=np.loadtxt(datadir+"/spectrograph/gratings.txt",dtype=str,usecols=(0,))
     grlmm,grgam0=np.loadtxt(datadir+"/spectrograph/gratings.txt",usecols=(1,2),unpack=True)
     grnum = np.where(grname==grating)[0][0]
     lmm = grlmm[grnum]
-    alpha_r = np.radians(grang+Grat0)
-    beta0_r = np.radians(artic*(1+ArtErr)+Home0)-alpha_r
-    gam0_r = np.radians(grgam0[grnum])
+    alpha0 = grang+Grat0
+    beta0_r = np.radians(artic*(1+ArtErr)+Home0-alpha0)
+    alpha_r = np.radians(alpha0 + dalpha)
+    gam0_r = np.radians(gamma+grgam0[grnum])
     lam0 = 1e7*np.cos(gam0_r)*(np.sin(alpha_r) + np.sin(beta0_r))/lmm
     ww = lam0/1000. - 4.
     fcam = np.polyval(FCampoly,ww)
@@ -71,8 +89,8 @@ def rsslam(grating, grang, artic, dpix_c):
     X = dpix_c/3162.
     lam_c = T0+T1*X+T2*(2*X**2-1)+T3*(4*X**3-3*X)
 
-#   print artic, grang, grnum, lmm, lam0, ww, fcam, disp, dfcam
-#   print T0, T1, T2, T3
+#    print artic, grang, dalpha, gamma, grnum, lmm, lam0, ww, fcam, disp, dfcam
+#    print T0, T1, T2, T3
     return lam_c
 
 # ---------------------------------------------------------------------------------
@@ -109,6 +127,7 @@ def thrufoc_rssspec(fitslist,option=""):
     artic =  float(hdr["CAMANG"])
     mask = (hdr["MASKID"]).strip()
     lamp = (hdr["LAMPID"]).strip()
+    dateobs = (hdr["DATE-OBS"]).replace("-","")
     if "COLTEM" in hdr:                                                         # allow for annoying SALT fits version change
         coltem = float(hdr["COLTEM"]) 
         camtem = float(hdr["CAMTEM"])
@@ -127,7 +146,7 @@ def thrufoc_rssspec(fitslist,option=""):
     for line in range(lines): 
         col_l[line] = np.argmax(onaxis_c[pix1_l[line]/cbin : pix2_l[line]/cbin]) + pix1_l[line]/cbin
     col_l[lines] = cols/2
-    wav_l = rsslam(grating, grang, artic, (col_l - cols/2)*cbin)
+    wav_l = rsslam(grating, grang, artic, (col_l - cols/2)*cbin, dateobs)
     focoff_l = ip.interp1d(wv_w, focoffs_w,kind ='cubic')(wav_l)
     gratno = np.where(grating_g==grating)[0]
     predfoc_l = Fm + focoff_l + dFto*(coltem-20.) + dFta*(camtem-20.) + dFg_g[gratno]
@@ -220,6 +239,30 @@ def thrufoc_rssspec(fitslist,option=""):
         for r in range(rows): print >> focplanefile, ("%5i " % (r)), (lines*"%8.2f " % tuple(bestfocussmooth_lr[:,r]))
 
     return
+# ---------------------------------------------------------------------------------
+
+def datedfile(filename,date):
+    """ select file based on observation date
+
+    Parameters
+    ----------
+    filename: string
+        text file name pattern, including "yyyymmdd" place holder for date
+    date: string
+        yyyymmdd of observation
+
+    Returns: file name
+
+    """
+
+    filelist = sorted(glob.glob(filename.replace('yyyymmdd','????????')))
+    dateoffs = filename.find('yyyymmdd')
+    datelist = [file[dateoffs:dateoffs+8] for file in filelist]
+    file = filelist[0]
+    for (f,fdate) in enumerate(datelist):
+        if int(date) < int(fdate): continue
+        file = filelist[f] 
+    return file    
 
 # ---------------------------------------------------------------------------------
 if __name__=='__main__':

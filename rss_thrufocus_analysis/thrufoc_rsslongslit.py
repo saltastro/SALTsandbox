@@ -11,6 +11,8 @@ from thrufoc_rssspec import blksmooth1d
 
 np.set_printoptions(threshold=np.nan)
 
+datadir = "/d/carol/Synched/software/SALT/pipeline/" 
+
 # ---------------------------------------------------------------------------------
 def thrufoc_rsslongslit(fitslist,option=""):
     """Analyse imaging through-focus data of longslit 
@@ -49,14 +51,35 @@ def thrufoc_rsslongslit(fitslist,option=""):
     rows,cols = hdulist_image["SCI"].data.shape
     mask = (hdr["MASKID"]).strip()
     lamp = (hdr["LAMPID"]).strip()
+    filter =  (hdr["FILTER"]).strip()
+    if "COLTEM" in hdr:                            # allow for annoying SALT fits version change
+        coltem = float(hdr["COLTEM"]) 
+        camtem = float(hdr["CAMTEM"])
+    else:
+        coltem = float(hdr["COLTEMP"]) 
+        camtem = float(hdr["CAMTEMP"])     
     slitarcsecs = float(mask[2:5])/10.
     slitbins = slitarcsecs*8./cbin
     onaxis_c = hdulist_image["SCI"].data[rows/2-32/rbin:rows/2+32/rbin,:].mean(axis=0)
     col = np.median(onaxis_c.argsort()[-(2+slitbins):])
     row_r = np.arange(rows)
 
+#   predict best focus
+    wav_w, focoffs_w = np.loadtxt(datadir+"/spectrograph/specfocus.txt",unpack=True) 
+    filter_f = np.loadtxt(datadir+"/spectrograph/filters.txt",dtype='str',usecols=(0,))
+    wav_f,dFf_f = np.loadtxt(datadir+"/spectrograph/filters.txt",usecols=(1,2),unpack=True)
+    fno = np.argwhere(filter==filter_f)[0]
+    focoff = ip.interp1d(wav_w, focoffs_w,kind ='cubic')(wav_f[fno]) + dFf_f[fno]
+    Fm = 736.-330.
+    dFta, dFto = 3.5, -34  
+    predfoc = Fm + focoff + dFto*(coltem-20.) + dFta*(camtem-20.)
+
     print "Mask:   ", mask, "  slitwidth: ", slitarcsecs, slitbins, " arcsec, bins"
+    print "Filter:    ", filter
     print "Lamp:   ", lamp
+    print "Col Temp:       %7.1f" % (coltem)
+    print "Cam Temp:       %7.1f" % (camtem)
+    print "Predicted Foc:  %7.1f" % (predfoc)
 
 #   calculate slit width vs row in each focus image
     print "\n image  focus  rows line width(arcsec)"
