@@ -15,9 +15,13 @@ Imaging thru-focus analysis of longslit
       is saved containing a "good row" flag, the column position, and the best focus of 
       the slit as a function of row.  The file name prefix is requested. 
 
+You will need to edit hardwired directory path "datadir" at line 14 of 
+thrufoc_rsslongslit.py. Then put qred.sex there.
+
 The sample 20111113_longslit_thrufoc.txt shows you what I get when I run it on the 0.6 
 arcsec longslit thru-focus data taken on 20111113 with the QTH lamp. On my machine, this 
-takes 5-10 secs. The program looks at the center image in the focus run to find the slit. 
+takes 5-10 secs. The configuration and the predicted best focus ("Autofocus" on PCON) are
+printed out.  The program looks at the center image in the focus run to find the slit. 
 Then it looks at each focus image and derives the slit width as a function of row, 
 printing out the mean width for each line, so you can see the rough best-focus. The slit 
 now has a focus curve as a function of row, which is block-averaged and spline-
@@ -117,8 +121,9 @@ Thru-focus analysis for longslit spectroscopy
       is requested. 
 
     You will need to edit hardwired directory path "datadir" at line 22 of 
-thrufoc_rssspec.py. Then put qred.sex there, create a subdirectory "spectrograph" 
-there, and put spec.txt, gratings.txt, and specfocus.txt in that subdirectory. 
+thrufoc_rssspec.py to be a directory of your choice. Then put qred.sex there, create a 
+subdirectory "spectrograph" there, and put the spec_yyymmdd.txt, gratings.txt, 
+imgdist.txt, and specfocus.txt in that subdirectory. 
 
 The samples 20141122_1800Ne_thrufoc.txt and 20141122_2300Ne_thrufoc.txt show you what I 
 get when I run it on longslit thru-focus runs taken on 20141122 with the Ne lamp 
@@ -141,7 +146,7 @@ At the very bottom, advice is given on the screw adjustments for the detector wh
 would zero out the tilt and tip errors.
 
 --------------------------------------------------------------------------------------
-flexure_rss.py fitslist (filesave)
+flexure_rssimage.py fitslist (filesave)
 
 Imaging flexure analysis 
 
@@ -149,8 +154,11 @@ Imaging flexure analysis
     option : if optional last argument = "filesave", text files "(prefix)_flex_(fpos).txt"
       and "(prefix)_sextr_(fpos).txt" are saved for each flexure image (0,...,fpos).  The 
       "flex" files containing a "good row" flag, and the row and column of each object 
-      relative to the rho=0 image (in pixels).  Thew sextr files contain the detailed 
+      relative to the rho=0 image (in pixels).  The sextr files contain the detailed 
       SeXtract output for each image. The file name prefix is requested. 
+
+    You will need to edit hardwired directory path "datadir" at line 25 of 
+flexure_rssimage.py to be a directory of your choice. Then put qred.sex there. 
 
 The sample 20160725_imflex.txt shows you what I get when I run it on the cartesian mask 
 (N99) imaging flexure data taken on 20160725 with the QTH lamp. On my machine, this takes 
@@ -163,3 +171,37 @@ motion separately to estimate changing distortion.  Using these 4 parameters, it
 determines the remaining residual rms in bins, which assesses the remaining distortion 
 change.  Finally, it generates a pdf graphic of the four parameters, saving them in the 
 .pdf files. 
+
+--------------------------------------------------------------------------------------
+flexure_rssspec.py imagefits specfitslist (filesave)
+
+Spectral flexure analysis 
+
+    imagefits: fits image of the mask (rho=0 image from imaging flexure run is good)
+    specfitslist: unix commandline list of spectral flexure fits files
+    option : if optional last argument = "filesave", text files "(prefix)_flex_(fpos).txt"
+      and "(prefix)_sextr_(fpos).txt" are saved for each flexure image (0,...,fpos).  The 
+      "flex" files containing a "good row" flag, and the row and column of each object 
+      relative to the rho=0 image (in pixels).  The sextr files contain the detailed 
+      SeXtract output for each image. The file name prefix is requested.
+
+    You will need to edit hardwired directory path "datadir" at line 29 of 
+flexure_rssspec.py to be a directory of your choice. Then put qred.sex there, create a 
+subdirectory "spectrograph" there, and put the spec_yyymmdd.txt files, and gratings.txt
+in that subdirectory. 
+
+The sample 20160725_grflex.txt shows you what I get when I run it on the cartesian mask 
+(N99) spectral flexure data taken on 20160725 with the QTH lamp. On my machine, this takes 
+just over a minute.  The program first maps the mask, reporting the total number of holes,
+the number of mask rows and columns, and the pixel position of the center.  Then it looks
+at the spectral flexure image closest to rho = 0 to identify the spectral lines, each of 
+which generates an image which looks like the mask.  This is culled down to the brightest 
+lines that form relatively complete mask images, listed in a table.  The overall shift 
+caused by the grating at rho=0 is shown, together with the line identification rms, in 
+pixels.  The identified spots are then identified in each image in the flexure series, 
+working out from rho = 0 as in the imaging flexure analysis above. The four flexure 
+parameters are then evaluated for each line, the mean row and column shift and the 
+apparent rotation in row and column about the center of the mask for that line, and these 
+are printed out, with the rms of the fit to this 4-parameter model.  Finally, it generates 
+a pdf graphic of the four parameters as a function of rho and line, saving them in a .pdf 
+file.  Column and row are shown together, as diamond and square markers.
